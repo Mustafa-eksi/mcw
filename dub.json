@@ -1,0 +1,13 @@
+{
+	"description": "Mustafa's creative widgets",
+	"dependencies": {
+		"bindbc-sdl": "~>2.3.5"
+	},
+    "versions": [ "SDL_3_4", "SDL_TTF_3_2_2", "SDL_Image_3_2" ],
+	"authors": [
+		"Mustafa Eksi"
+	],
+	"copyright": "Copyright © 2026, Mustafa Eksi",
+	"license": "LGPL-2.0-only",
+	"name": "mcw"
+}
