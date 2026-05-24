@@ -13,13 +13,16 @@ import window;
 import widget;
 import widgets;
 import launcher;
+import test;
 
 const uint TEXT_FONT_SIZE = 32;
 const uint WINDOW_HORIZONTAL_PADDING = 10;
 const uint WINDOW_VERTICAL_PADDING = 10;
 const uint PROMPT_BOTTOM_MARGIN = 20;
 
-int main() {
+int main(string[] args) {
+    if (args.length < 2)
+        return -1;
     LoadMsg ret = loadSDL();
     if(ret != LoadMsg.success) {
       writeln("Error loading SDL dll");
@@ -46,9 +49,6 @@ int main() {
     scope(exit) TTF_Quit();
 
     TTF_Font *font = TTF_OpenFont("liberation-sans.ttf", TEXT_FONT_SIZE);
-    const int FONT_HEIGHT = TTF_GetFontHeight(font);
-    uint WINDOW_HEIGHT = cast(uint)(FONT_HEIGHT*1.5);
-    const uint WINDOW_WIDTH = 500;
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         writeln(SDL_GetError());
@@ -56,15 +56,19 @@ int main() {
     }
     scope(exit) SDL_Quit();
 
-    Launcher launcher_window = new Launcher(SDL_FRect(0, 0, 500, 100), "mcw",
-            font);
+    Window[string] windows;
+    windows["launcher"] = cast(Window)new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
+    windows["test"] = cast(Window)new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);
+    string current_window = args[1];
 
-    while (!launcher_window.quit) {
+    SDL_ShowWindow(windows[current_window].window);
+
+    while (!windows[current_window].quit) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            launcher_window.handleEvent(&event);
+            windows[current_window].handleEvent(&event);
         }
-        launcher_window.draw();
+        windows[current_window].draw();
     }
 
     return 0;

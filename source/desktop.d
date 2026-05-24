@@ -62,7 +62,7 @@ DesktopEntry[] indexEntries(SDL_Renderer *renderer) {
     return entries;
 }
 
-DesktopEntry[] findInEntries(DesktopEntry[] entries, string search, int limit=5) {
+DesktopEntry[] findInEntries(DesktopEntry[] entries, string search, int limit=4) {
     DesktopEntry[] filtered = [];
     foreach (entry; entries) {
         if (filtered.length > limit)
@@ -80,32 +80,3 @@ string generateList(ref DesktopEntry[] entries) {
     }
     return output;
 }
-
-    // Index entries
-    // Search
-
-    // auto find_result = execute(["bash", "-c", "find "~ICON_DIRECTORY_SEARCH]);
-    // if (find_result.status != 0) {
-    //     writeln("Find error");
-    // }
-    // auto iconfiles = find_result.output.strip().split('\n');
-    //
-    // string finalwidget;
-    // // Generate yuck
-    // finalwidget ~= `(box :active true :class "launcher-list" :orientation "v" :space-evenly false :spacing 5 `;
-    // foreach(i, entry; entries) {
-    //     finalwidget ~= `(box :class "launcher-element" :height 24 :orientation "h" :space-evenly false :spacing 10`;
-    //     //if (i == 0) finalwidget ~= ` :class "launcher-first"`;
-    //     auto iconpath = iconfiles.find!(e => e.endsWith(entry.icon~".png"));
-    //     if (iconpath.length != 0)
-    //         finalwidget ~= `   (image :image-width 24 :image-height 24 :path "`~iconpath[0]~`")`;
-    //     finalwidget ~= `   (input :class "launcher-el-input" :onaccept 'hyprctl dispatch exec "`~entry.exec~`" && eww close launcher' :value "`~entry.name~`")`;
-    //     //finalwidget ~= `   (checkbox :active true :class "launcher-check" :onchecked 'hyprctl dispatch exec "`~entry.exec~`" && eww close launcher')`;
-    //     finalwidget ~= `)`;
-    // }
-    // finalwidget ~= `)`;
-    // //writeln(finalwidget);
-    // auto result = execute(["eww", "update", `launcher_body=`~finalwidget~``]);
-    // if (result.status != 0) {
-    //     writeln(result);
-    // }

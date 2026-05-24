@@ -15,22 +15,28 @@ class Launcher : Window {
     IconList icon_list;
     Box box;
     int FONT_HEIGHT;
+    int spacing = 10;
 
     this (SDL_FRect rect, string title, TTF_Font *font) {
         super(rect, title);
+        SDL_SetWindowBordered(window, false);
+
         entries = indexEntries(renderer);
 
         FONT_HEIGHT = TTF_GetFontHeight(font);
+        int window_width, window_height;
+        SDL_GetWindowSize(window, &window_width, &window_height);
 
-        text_input = new TextInput(SDL_FRect(0, 0, 400, FONT_HEIGHT), renderer, font);
-        icon_list = new IconList(SDL_FRect(0, 0, 400, FONT_HEIGHT*5), renderer, font);
-        box = new Box(SDL_FRect(0, 0), renderer, 5, Box.Orientation.Vertical);
+        text_input = new TextInput(SDL_FRect(0, 0, 0, FONT_HEIGHT), renderer, font);
+        icon_list = new IconList(SDL_FRect(0, 0, 0, FONT_HEIGHT), renderer, font);
+        box = new Box(SDL_FRect(0, 0, window_width, window_height), renderer,
+                spacing, Box.Orientation.Vertical);
+        box.uniform = false;
 
         box.addChild(cast(Widget*)&text_input);
         box.addChild(cast(Widget*)&icon_list);
+        box.applyStyleToChildren();
         widget = cast(Widget*)&box;
-        writeln("ti: ", text_input.rect, " - il: ", icon_list.rect);
-
     }
 
     override void handleEvent(SDL_Event *event) {
@@ -44,9 +50,15 @@ class Launcher : Window {
             }
             return;
         }
-        icon_list.entries = findInEntries(entries, text_input.prompt[0..$-1]);
-        icon_list.updateList();
-        SDL_SetWindowSize(window, cast(int)widget.rect.w, cast(int)widget.rect.h);
+        if (event.type == SDL_EVENT_KEY_UP) {
+            icon_list.entries = findInEntries(entries, text_input.prompt[0..$-1]);
+            icon_list.updateList();
+            icon_list.rect.h = FONT_HEIGHT * icon_list.entries.length;
+            box.rect.h = text_input.rect.h + FONT_HEIGHT *
+                icon_list.entries.length + spacing*3;
+            SDL_SetWindowSize(window, cast(int)box.rect.w, cast(int)box.rect.h);
+            box.adjustLayout();
+        }
         this.Window.handleEvent(event);
     }
 

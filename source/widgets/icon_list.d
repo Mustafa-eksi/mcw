@@ -26,6 +26,7 @@ class IconList : Widget {
     }
 
     override void draw() {
+        this.Widget.draw();
         const int ICON_SIZE = FONT_HEIGHT;
         TTF_DrawRendererText(ttf_text, rect.x+ICON_SIZE+5, rect.y);
         foreach (i, fe; entries) {
