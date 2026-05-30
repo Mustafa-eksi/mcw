@@ -2,7 +2,7 @@ import bindbc.sdl;
 import styling;
 
 enum WidgetTypes {
-    Box, IconList, TextInput, Label, List, Icon,
+    Unknown = 0, Box, IconList, TextInput, Label, List, Icon,
 }
 
 class Widget {

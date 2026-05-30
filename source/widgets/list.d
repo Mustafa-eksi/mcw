@@ -7,22 +7,21 @@ import bindbc.sdl;
 
 import widgets;
 
-class List : Widget {
-    enum Orientation {
-        Vertical,
-        Horizontal
-    }
-    int spacing;
-    Orientation orientation;
-    Widget*[] children;
-    float element_size = 0;
+class List : Container {
+    float element_size;
 
     this (SDL_FRect rect, SDL_Renderer *renderer, int spacing, Orientation
             orientation) {
         this.type = WidgetTypes.List;
-        super(rect, renderer);
-        this.spacing = spacing;
-        this.orientation = orientation;
+        super(rect, renderer, spacing, orientation);
+        this.element_size = 0;
+    }
+
+    int idealHeight() {
+        if (orientation == Orientation.Vertical) {
+            return (element_size+spacing).to!int*children.length.to!int+spacing.to!int;
+        }
+        assert(0);
     }
 
     void addChild(W)(W* w) if (is(W : Widget)) {
@@ -36,41 +35,7 @@ class List : Widget {
         adjustLayout();
     }
 
-    void removeChild(int i) {
-        // FIXME: This is a quickfix, change this later
-        assert(0 <= i && i < children.length);
-        if (i+1 == children.length) {
-            children.popBack();
-            return;
-        }
-        children = children[0..i]~children[i+1..$-1];
-        adjustLayout();
-    }
-
-    override void handleEvent(SDL_Event *event) {
-        foreach (ch; children) {
-            ch.handleEvent(event);
-        }
-    }
-
-    void applyStyleToChildren() {
-        foreach (ref ch; children) {
-            ch.style = style;
-            if (ch.type == WidgetTypes.Box)
-                (cast(Box*)ch).applyStyleToChildren();
-            if (ch.type == WidgetTypes.List)
-                (cast(List*)ch).applyStyleToChildren();
-        }
-    }
-
-    int idealHeight() {
-        if (orientation == Orientation.Vertical) {
-            return (element_size+spacing).to!int*children.length.to!int+spacing.to!int;
-        }
-        assert(0);
-    }
-
-    void adjustLayout() {
+    override void adjustLayout() {
         float ycursor = rect.y + spacing;
         float xcursor = rect.x + spacing;
 
@@ -100,18 +65,6 @@ class List : Widget {
             }
 
             ch.has_moved = true;
-        }
-    }
-
-    override void draw() {
-        this.Widget.draw();
-        if (has_moved) {
-            adjustLayout();
-            has_moved = false;
-        }
-        foreach (i, ch; children) {
-            if (ch.visible)
-                ch.draw();
         }
     }
 }
