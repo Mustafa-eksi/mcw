@@ -1,4 +1,5 @@
-import std.algorithm : max;
+import std.algorithm : max, remove;
+import std.range : popBack;
 import std.string : toStringz, fromStringz, toLower;
 
 import bindbc.sdl;
@@ -20,10 +21,22 @@ class Box : Widget {
         super(rect, renderer);
         this.spacing = spacing;
         this.orientation = orientation;
+        this.type = WidgetTypes.Box;
     }
 
     void addChild(Widget* w) {
         children ~= w;
+        adjustLayout();
+    }
+
+    void removeChild(int i) {
+        // FIXME: This is a quickfix, change this later
+        assert(0 <= i && i < children.length);
+        if (i+1 == children.length) {
+            children.popBack();
+            return;
+        }
+        children = children[0..i]~children[i+1..$-1];
         adjustLayout();
     }
 
@@ -36,6 +49,10 @@ class Box : Widget {
     void applyStyleToChildren() {
         foreach (ref ch; children) {
             ch.style = style;
+            if (ch.type == WidgetTypes.Box)
+                (cast(Box*)ch).applyStyleToChildren();
+            if (ch.type == WidgetTypes.List)
+                (cast(List*)ch).applyStyleToChildren();
         }
     }
 

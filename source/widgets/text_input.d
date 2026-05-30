@@ -12,6 +12,7 @@ class TextInput : Widget {
 
     this (SDL_FRect rect, SDL_Renderer *renderer, TTF_Font *font) {
         super(rect, renderer);
+        this.type = WidgetTypes.TextInput;
         prompt = "|";
         engine = TTF_CreateRendererTextEngine(renderer);
         ttf_text = TTF_CreateText(engine, font, prompt.toStringz,

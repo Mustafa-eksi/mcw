@@ -18,6 +18,7 @@ class Label : Widget {
 
     this (SDL_FRect rect, SDL_Renderer *renderer, TTF_Font *font, string s) {
         super(rect, renderer);
+        this.type = WidgetTypes.Label;
         text = s;
         engine = TTF_CreateRendererTextEngine(renderer);
         ttf_text = TTF_CreateText(engine, font, text.toStringz,
@@ -27,6 +28,11 @@ class Label : Widget {
         text_x = rect.x;
         text_y = rect.y;
         tp = TextPlacement.Center;
+    }
+
+    void setText(string s) {
+        text = s;
+        TTF_SetTextString(ttf_text, text.toStringz, text.length);
     }
 
     void setTextPlacement() {

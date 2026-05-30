@@ -24,16 +24,13 @@ class LayoutTestWindow : Window {
         for (int i = 0; i < 5; i++) {
             boxes ~= new Box(rect, renderer, 5, Box.Orientation.Horizontal);
             main_box.addChild(cast(Widget*)&boxes[i]);
-            main_box.applyStyleToChildren();
 
             for (int j = 0; j < 5; j++) {
                 labels ~= new Label(rect, renderer, font, (i*5+j).to!string);
                 boxes.back.addChild(cast(Widget*)&labels.back);
             }
 
-            boxes.back.applyStyleToChildren();
         }
-
         main_box.applyStyleToChildren();
 
         widget = cast(Widget*)&main_box;

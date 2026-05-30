@@ -6,3 +6,5 @@ public import icon_list;
 public import text_input;
 public import label;
 public import styling;
+public import list;
+public import icon;

@@ -1,11 +1,16 @@
 import bindbc.sdl;
 import styling;
 
+enum WidgetTypes {
+    Box, IconList, TextInput, Label, List, Icon,
+}
+
 class Widget {
     SDL_FRect rect;
     SDL_Renderer *renderer;
     Style style;
-    bool has_moved;
+    bool has_moved, visible=true;
+    WidgetTypes type;
 
     this (SDL_FRect rect, SDL_Renderer *renderer) {
         this.rect = rect;
@@ -24,4 +29,9 @@ class Widget {
     }
 
     void handleEvent(SDL_Event *event) {}
+
+    invariant {
+        assert(rect.x >= 0 && rect.y >= 0 && rect.w >= 0 && rect.h >= 0);
+        assert(renderer !is null);
+    }
 }

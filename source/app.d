@@ -8,12 +8,9 @@ import std.algorithm;
 import bindbc.sdl;
 import bindbc.loader;
 
-import desktop;
 import window;
-import widget;
 import widgets;
-import launcher;
-import test;
+import apps;
 
 const uint TEXT_FONT_SIZE = 32;
 const uint WINDOW_HORIZONTAL_PADDING = 10;
@@ -59,6 +56,7 @@ int main(string[] args) {
     Window[string] windows;
     windows["launcher"] = cast(Window)new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
     windows["test"] = cast(Window)new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);
+    windows["test_list"] = cast(Window)new ListTestWindow(SDL_FRect(0, 0, 800, 600), "test_list", font);
     string current_window = args[1];
 
     SDL_ShowWindow(windows[current_window].window);
