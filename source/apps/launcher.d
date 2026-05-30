@@ -19,6 +19,7 @@ class Launcher : Window {
 
     this (SDL_FRect rect, string title, TTF_Font *font) {
         super(rect, title);
+        SDL_SetWindowAlwaysOnTop(window, true);
         SDL_SetWindowBordered(window, false);
 
         entries = indexEntries(renderer);
@@ -44,10 +45,10 @@ class Launcher : Window {
     }
 
     override void handleEvent(SDL_Event *event) {
-        string ti_s = text_input.prompt;
+        string ti_s = text_input.text;
         this.Window.handleEvent(event);
         if (event.key.key == SDLK_ENTER) {
-            auto fe = findInEntries(entries, text_input.prompt[0..$-1]);
+            auto fe = findInEntries(entries, text_input.text[0..$-1]);
             if (!fe.empty) {
                 executeShell(fe.front.exec);
                 quit = true;
@@ -56,8 +57,8 @@ class Launcher : Window {
             }
             return;
         }
-        if (ti_s != text_input.prompt) {
-            icon_list.entries = findInEntries(entries, text_input.prompt[0..$-1]);
+        if (ti_s != text_input.text) {
+            icon_list.entries = findInEntries(entries, text_input.text[0..$-1]);
             icon_list.updateList();
             box.rect.h = text_input.rect.h + icon_list.list.idealHeight() +
                 spacing * 3;

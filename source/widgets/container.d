@@ -30,12 +30,7 @@ abstract class Container : Widget {
 
     void removeChild(int i) {
         assert(0 <= i && i < children.length);
-        if (i+1 == children.length) {
-            children.popBack();
-            return;
-        }
-        // FIXME: This is a quickfix, change this later
-        children = children[0..i]~children[i+1..$-1];
+        children = children.remove(i);
         adjustLayout();
     }
 
@@ -57,12 +52,12 @@ abstract class Container : Widget {
 
     void adjustLayout() {}
 
+    override void hasMoved() {
+        adjustLayout();
+    }
+
     override void draw() {
         this.Widget.draw();
-        if (has_moved) {
-            adjustLayout();
-            has_moved = false;
-        }
         foreach (i, ch; children) {
             if (ch.visible)
                 ch.draw();

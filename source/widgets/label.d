@@ -11,7 +11,7 @@ class Label : Widget {
     enum TextPlacement {
         Start, Center
     }
-    TextPlacement tp;
+    TextPlacement _tp;
     float text_x, text_y;
     int FONT_HEIGHT;
     int text_width;
@@ -27,7 +27,7 @@ class Label : Widget {
         TTF_MeasureString(font, text.toStringz, text.length, cast(int)rect.w, &text_width, null);
         text_x = rect.x;
         text_y = rect.y;
-        tp = TextPlacement.Center;
+        text_placement = TextPlacement.Center;
     }
 
     void setText(string s) {
@@ -35,7 +35,8 @@ class Label : Widget {
         TTF_SetTextString(ttf_text, text.toStringz, text.length);
     }
 
-    void setTextPlacement() {
+    @property void text_placement(TextPlacement tp) {
+        _tp = tp;
         switch (tp) {
         case TextPlacement.Start:
             text_x = rect.x;
@@ -51,13 +52,16 @@ class Label : Widget {
         }
     }
 
+    @property TextPlacement text_placement() {
+        return _tp;
+    }
+
+    override void hasMoved() {
+        text_placement(_tp);
+    }
+
     override void draw() {
         this.Widget.draw();
-        // FIXME: this is bad for performance
-        if (has_moved) {
-            setTextPlacement();
-            has_moved = false;
-        }
         TTF_DrawRendererText(ttf_text, cast(int)text_x, cast(int)text_y);
     }
 }

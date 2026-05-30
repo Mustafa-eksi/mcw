@@ -16,7 +16,7 @@ class ListTestWindow : Window {
 
     this (SDL_FRect rect, string title, TTF_Font *font) {
         super(rect, title);
-        list = new List(rect, renderer, 5, List.Orientation.Horizontal);
+        list = new List(rect, renderer, 5, List.Orientation.Vertical);
         list.style.background_color = SDL_Color(20, 50, 20, 255);
         list.style.border_color = SDL_Color(20, 100, 20, 255);
         this.font = font;

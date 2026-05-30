@@ -9,13 +9,12 @@ class Widget {
     SDL_FRect rect;
     SDL_Renderer *renderer;
     Style style;
-    bool has_moved, visible=true;
+    bool visible=true;
     WidgetTypes type;
 
     this (SDL_FRect rect, SDL_Renderer *renderer) {
         this.rect = rect;
         this.renderer = renderer;
-        this.has_moved = false;
     }
 
     void draw() {
@@ -29,6 +28,8 @@ class Widget {
     }
 
     void handleEvent(SDL_Event *event) {}
+
+    void hasMoved() { }
 
     invariant {
         assert(rect.x >= 0 && rect.y >= 0 && rect.w >= 0 && rect.h >= 0);

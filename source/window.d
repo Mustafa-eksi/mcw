@@ -16,8 +16,6 @@ class Window : Widget {
         props = SDL_CreateProperties();
 
         SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title.toStringz);
-        // FIXME: These are opinionated configurations:
-        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_ALWAYS_ON_TOP_BOOLEAN, true);
         SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIDDEN_BOOLEAN, true);
         SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, rect.w.to!int);
         SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, rect.h.to!int);

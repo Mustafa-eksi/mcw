@@ -39,8 +39,7 @@ class IconList : Widget {
                     renderer, null);
             labels ~= new Label(SDL_FRect(0, 0, 200, FONT_HEIGHT), renderer,
                     font, (i+10).to!string);
-            labels.back.tp = Label.TextPlacement.Start;
-            labels.back.setTextPlacement();
+            labels.back.text_placement = Label.TextPlacement.Start;
             lists.back.addChild(&icons.back);
             lists.back.addChild(&labels.back);
             list.addChild(&lists.back);
@@ -66,12 +65,12 @@ class IconList : Widget {
         // TTF_SetTextString(ttf_text, list_str.toStringz, list_str.length);
     }
 
+    override void hasMoved() {
+        list.rect = rect;
+        list.adjustLayout();
+    }
+
     override void draw() {
-        if (has_moved) {
-            list.rect = rect;
-            list.adjustLayout();
-            has_moved = false;
-        }
         this.Widget.draw();
         const int ICON_SIZE = FONT_HEIGHT;
         // TTF_DrawRendererText(ttf_text, rect.x+ICON_SIZE+5, rect.y);

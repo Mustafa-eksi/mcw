@@ -64,7 +64,7 @@ class List : Container {
                 ch.rect.h = rect.y+(rect.h-spacing)-ch.rect.y;
             }
 
-            ch.has_moved = true;
+            ch.hasMoved();
         }
     }
 }
