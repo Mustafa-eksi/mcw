@@ -11,6 +11,7 @@ import bindbc.loader;
 import mcw.window;
 import mcw.widgets;
 import mcw.apps;
+import mcw.util;
 
 const uint TEXT_FONT_SIZE = 32;
 const uint WINDOW_HORIZONTAL_PADDING = 10;
@@ -20,38 +21,13 @@ const uint PROMPT_BOTTOM_MARGIN = 20;
 int main(string[] args) {
     if (args.length < 2)
         return -1;
-    LoadMsg ret = loadSDL();
-    if(ret != LoadMsg.success) {
-      writeln("Error loading SDL dll");
-      return -4;
-    }
 
-    ret = loadSDLTTF();
-    if(ret != LoadMsg.success) {
-      writeln("Error loading SDL_ttf dll");
-      return -5;
-    }
-
-    ret = loadSDLImage();
-    if(ret != LoadMsg.success) {
-      writeln("Error loading SDL_image dll");
-      return -6;
-    }
-
-    // TTF initializing and font loading
-    if (!TTF_Init()) {
-        writeln("TTF init failed");
+    if (mcwInitAll() != 0) {
         return -1;
     }
-    scope(exit) TTF_Quit();
+    scope(exit) mcwQuitAll();
 
     TTF_Font *font = TTF_OpenFont("liberation-sans.ttf", TEXT_FONT_SIZE);
-
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        writeln(SDL_GetError());
-        return -1;
-    }
-    scope(exit) SDL_Quit();
 
     Window[string] windows;
     windows["launcher"] = cast(Window)new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
