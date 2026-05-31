@@ -8,9 +8,9 @@ import std.algorithm;
 import bindbc.sdl;
 import bindbc.loader;
 
-import window;
-import widgets;
-import apps;
+import mcw.window;
+import mcw.widgets;
+import mcw.apps;
 
 const uint TEXT_FONT_SIZE = 32;
 const uint WINDOW_HORIZONTAL_PADDING = 10;

@@ -1,8 +1,10 @@
+module mcw.widgets.text_input;
+
 import std.string : toStringz, fromStringz, toLower;
 
 import bindbc.sdl;
 
-import widgets;
+import mcw.widgets;
 
 class TextInput : Label {
 

@@ -1,4 +1,6 @@
-import widgets;
+module mcw.widgets.icon;
+
+import mcw.widgets;
 import bindbc.sdl;
 
 class Icon : Widget {

@@ -1,3 +1,5 @@
+module mcw.apps.test_list;
+
 import std.conv : to;
 import std.math : sin, cos;
 import std.range : back, popBack, empty;
@@ -5,8 +7,8 @@ import std.algorithm : map;
 
 import bindbc.sdl;
 
-import window;
-import widgets;
+import mcw.window;
+import mcw.widgets;
 
 class ListTestWindow : Window {
     List list;

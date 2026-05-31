@@ -1,3 +1,5 @@
+module mcw.apps.launcher;
+
 import std.stdio : writeln;
 import std.range : empty, front;
 import std.process : executeShell;
@@ -5,9 +7,9 @@ import std.algorithm.iteration : map;
 
 import bindbc.sdl;
 
-import desktop;
-import window;
-import widgets;
+import mcw.desktop;
+import mcw.window;
+import mcw.widgets;
 
 class Launcher : Window {
     DesktopEntry[] entries, filtered_entries;

@@ -1,10 +1,12 @@
+module mcw.widgets.box;
+
 import std.algorithm : max, remove;
 import std.range : popBack;
 import std.string : toStringz, fromStringz, toLower;
 
 import bindbc.sdl;
 
-import widgets;
+import mcw.widgets;
 
 class Box : Container {
     bool uniform = true;

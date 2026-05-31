@@ -1,5 +1,7 @@
+module mcw.widgets.widget;
+
 import bindbc.sdl;
-import styling;
+import mcw.widgets.styling;
 
 enum WidgetTypes {
     Unknown = 0, Box, IconList, TextInput, Label, List, Icon,

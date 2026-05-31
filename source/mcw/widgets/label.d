@@ -1,8 +1,10 @@
+module mcw.widgets.label;
+
 import std.string : toStringz;
 
 import bindbc.sdl;
 
-import widget;
+import mcw.widgets.widget;
 
 class Label : Widget {
     string text;

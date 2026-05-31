@@ -1,3 +1,5 @@
+module mcw.widgets.icon_list;
+
 import std.string : toStringz, fromStringz, toLower;
 import std.range : back;
 import std.conv : to;
@@ -5,8 +7,8 @@ import std.algorithm : min;
 
 import bindbc.sdl;
 
-import widgets;
-import desktop;
+import mcw.widgets;
+import mcw.desktop;
 
 class IconList : Widget {
     // string list_str;

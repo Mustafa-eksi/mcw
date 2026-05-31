@@ -1,3 +1,5 @@
+module mcw.desktop;
+
 import std.stdio : writeln;
 import std.process : execute;
 import std.file : dirEntries, SpanMode, read;

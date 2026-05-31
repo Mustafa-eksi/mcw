@@ -1,9 +1,11 @@
+module mcw.window;
+
 import std.string : toStringz, fromStringz, toLower, StringException;
 import std.conv : to;
 
 import bindbc.sdl;
 
-import widget;
+import mcw.widgets.widget;
 
 // Window inheriting widget is a coincidence (or is it?)
 class Window : Widget {

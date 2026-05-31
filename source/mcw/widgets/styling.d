@@ -1,3 +1,5 @@
+module mcw.widgets.styling;
+
 import bindbc.sdl;
 
 struct Style {

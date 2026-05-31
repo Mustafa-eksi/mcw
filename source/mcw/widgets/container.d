@@ -1,3 +1,5 @@
+module mcw.widgets.container;
+
 import std.algorithm : max, remove;
 import std.range : empty, popBack;
 import std.string : toStringz, fromStringz, toLower;
@@ -5,7 +7,7 @@ import std.conv : to;
 
 import bindbc.sdl;
 
-import widgets;
+import mcw.widgets;
 
 abstract class Container : Widget {
     enum Orientation {
