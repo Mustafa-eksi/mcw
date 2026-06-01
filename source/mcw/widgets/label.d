@@ -7,6 +7,8 @@ import bindbc.sdl;
 import mcw.widgets.widget;
 
 class Label : Widget {
+    private SDL_Color _text_color = SDL_Color(255, 255, 255, 255);
+
     string text;
     TTF_TextEngine *engine;
     TTF_Text *ttf_text;
@@ -56,6 +58,15 @@ class Label : Widget {
 
     @property TextPlacement text_placement() {
         return _tp;
+    }
+
+    @property void text_color(SDL_Color c) {
+        _text_color = c;
+        TTF_SetTextColor(ttf_text, _text_color.tupleof);
+    }
+
+    @property SDL_Color text_color() {
+        return _text_color;
     }
 
     override void hasMoved() {
