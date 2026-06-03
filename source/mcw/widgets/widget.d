@@ -22,8 +22,10 @@ class Widget {
     void draw() {
         SDL_Color c;
         SDL_GetRenderDrawColor(renderer, &c.r, &c.g, &c.b, &c.a);
-        SDL_SetRenderDrawColor(renderer, style.background_color.tupleof);
-        SDL_RenderFillRect(renderer, &rect);
+        if (style.background_color.a != 0) {
+            SDL_SetRenderDrawColor(renderer, style.background_color.tupleof);
+            SDL_RenderFillRect(renderer, &rect);
+        }
         SDL_SetRenderDrawColor(renderer, style.border_color.tupleof);
         SDL_RenderRect(renderer, &rect);
         SDL_SetRenderDrawColor(renderer, c.tupleof);
