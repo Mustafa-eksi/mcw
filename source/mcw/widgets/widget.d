@@ -8,14 +8,14 @@ enum WidgetTypes {
 }
 
 class Widget {
-    SDL_FRect rect;
+    private SDL_FRect _rect;
     SDL_Renderer *renderer;
     Style style;
     bool visible=true;
     WidgetTypes type;
 
     this (SDL_FRect rect, SDL_Renderer *renderer) {
-        this.rect = rect;
+        this._rect = rect;
         this.renderer = renderer;
     }
 
@@ -29,11 +29,11 @@ class Widget {
 
             if (style.background_color.a != 0) {
                 SDL_SetRenderDrawColor(renderer, style.background_color.tupleof);
-                SDL_RenderFillRect(renderer, &rect);
+                SDL_RenderFillRect(renderer, rectAddr);
             }
             if (style.border_color.a != 0) {
                 SDL_SetRenderDrawColor(renderer, style.border_color.tupleof);
-                SDL_RenderRect(renderer, &rect);
+                SDL_RenderRect(renderer, rectAddr);
             }
         }
     }
@@ -42,8 +42,21 @@ class Widget {
 
     void hasMoved() { }
 
+    @property void rect(SDL_FRect r) {
+        _rect = r;
+        hasMoved();
+    }
+
+    @property ref SDL_FRect rect() {
+        return _rect;
+    }
+
+    SDL_FRect *rectAddr() {
+        return &_rect;
+    }
+
     invariant {
-        assert(rect.x >= 0 && rect.y >= 0 && rect.w >= 0 && rect.h >= 0);
+        assert(_rect.x >= 0 && _rect.y >= 0 && _rect.w >= 0 && _rect.h >= 0);
         assert(renderer !is null);
     }
 }

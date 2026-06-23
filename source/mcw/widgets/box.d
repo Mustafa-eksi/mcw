@@ -27,6 +27,7 @@ class Box : Container {
         float w = (rect.w-spacing)/children.length-spacing;
         foreach (i, ref ch; children) {
             ch.rect.x = xcursor;
+            assert(ch.rect.x == xcursor);
             ch.rect.y = ycursor;
 
             if (orientation == Orientation.Vertical) {

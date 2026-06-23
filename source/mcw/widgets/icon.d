@@ -14,6 +14,6 @@ class Icon : Widget {
 
     override void draw() {
         this.Widget.draw();
-        SDL_RenderTexture(renderer, texture, null, &rect);
+        SDL_RenderTexture(renderer, texture, null, rectAddr);
     }
 }
