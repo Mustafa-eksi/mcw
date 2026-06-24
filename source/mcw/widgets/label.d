@@ -76,4 +76,9 @@ class Label : Widget {
         this.Widget.draw();
         TTF_DrawRendererText(ttf_text, cast(int)text_x, cast(int)text_y);
     }
+
+    ~this () {
+        TTF_DestroyText(ttf_text);
+        TTF_DestroyRendererTextEngine(engine);
+    }
 }

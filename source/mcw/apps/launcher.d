@@ -117,10 +117,9 @@ class Launcher : Window {
     }
 
     ~this () {
-        entries.map!((DesktopEntry e) {
+        foreach (ref DesktopEntry e; entries) {
             if (e.icon_texture)
                 SDL_DestroyTexture(e.icon_texture);
-            return 0;
-        });
+        }
     }
 }

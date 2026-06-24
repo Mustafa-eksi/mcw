@@ -15,4 +15,10 @@ class Icon : Widget {
         this.Widget.draw();
         SDL_RenderTexture(renderer, texture, null, rectAddr);
     }
+
+    ~this() {
+        if (texture !is null) {
+            SDL_DestroyTexture(texture);
+        }
+    }
 }

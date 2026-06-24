@@ -2,7 +2,7 @@ module mcw.desktop;
 
 import std.stdio : writeln;
 import std.process : execute;
-import std.file : dirEntries, SpanMode, read;
+import std.file : dirEntries, SpanMode, readText;
 import std.string: split, startsWith, strip, toLower, endsWith, join;
 import std.algorithm.mutation : remove;
 import std.algorithm.searching : find, canFind;
@@ -21,7 +21,7 @@ struct DesktopEntry {
 
     this(string _filepath) {
         filepath = _filepath;
-        char[] filecontent = cast(char[])read(filepath);
+        char[] filecontent = cast(char[])readText(filepath);
         auto lines = filecontent.split('\n');
 
         auto names = lines.remove!((line) => !line.startsWith("Name="));
@@ -52,13 +52,13 @@ DesktopEntry[] indexEntries(SDL_Renderer *renderer) {
     auto iconfiles = find_result.output.strip().split('\n');
     foreach(string desktop_entry; dirEntries(DESKTOP_ENTRY_DIRECTORY, SpanMode.shallow)) {
         if (desktop_entry.endsWith(".desktop")) {
-            entries[entries.length++] = DesktopEntry(desktop_entry);
-            auto entry = entries[entries.length.to!int-1];
+            entries ~= DesktopEntry(desktop_entry);
             auto iconpath = iconfiles.find!(e =>
-                    e.split('/').back.startsWith(entry.icon));
-            if (!iconpath.empty)
-                entries[entries.length.to!int-1].icon_texture =
+                    !entries.back.icon.empty && e.split('/').back.startsWith(entries.back.icon));
+            if (!iconpath.empty) {
+                entries.back.icon_texture =
                     SDL_CreateTextureFromSurface(renderer, IMG_Load(iconpath[0].toStringz));
+            }
         }
     }
     return entries;

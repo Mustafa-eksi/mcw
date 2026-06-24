@@ -1,7 +1,7 @@
 module mcw.widgets.box;
 
 import std.algorithm : max, remove;
-import std.range : popBack;
+import std.range : popBack, empty;
 import std.string : toStringz, fromStringz, toLower;
 
 import bindbc.sdl;
@@ -17,6 +17,8 @@ class Box : Container {
     }
 
     override void adjustLayout() {
+        if (children.empty)
+            return;
         float ycursor = rect.y + spacing;
         float xcursor = rect.x + spacing;
 
