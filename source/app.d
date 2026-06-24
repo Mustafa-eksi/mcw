@@ -34,6 +34,10 @@ int main(string[] args) {
     windows["test"] = cast(Window)new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);
     windows["test_list"] = cast(Window)new ListTestWindow(SDL_FRect(0, 0, 800, 600), "test_list", font);
     string current_window = args[1];
+    if (current_window !in windows) {
+        writeln("Invalid window name: ", current_window);
+        return -1;
+    }
 
     SDL_ShowWindow(windows[current_window].window);
 
