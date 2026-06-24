@@ -14,7 +14,6 @@ class Box : Container {
     this (SDL_FRect rect, SDL_Renderer *renderer, int spacing, Orientation
             orientation) {
         super(rect, renderer, spacing, orientation);
-        this.type = WidgetTypes.Box;
     }
 
     override void adjustLayout() {

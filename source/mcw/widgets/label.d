@@ -22,7 +22,6 @@ class Label : Widget {
 
     this (SDL_FRect rect, SDL_Renderer *renderer, TTF_Font *font, string s) {
         super(rect, renderer);
-        this.type = WidgetTypes.Label;
         text = s;
         engine = TTF_CreateRendererTextEngine(renderer);
         ttf_text = TTF_CreateText(engine, font, text.toStringz,

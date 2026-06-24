@@ -27,10 +27,10 @@ class ListTestWindow : Window {
         for (int i = 0; i < 5; i++) {
             labels ~= new Label(SDL_FRect(0, 0, 200, FONT_HEIGHT), renderer,
                     font, (i+10).to!string);
-            list.addChild(cast(Widget*)&labels.back);
+            list.addChild(labels.back);
         }
         list.applyStyleToChildren();
-        widget = cast(Widget*)&list;
+        widget = list;
     }
 
     override void handleEvent(SDL_Event *event) {
@@ -39,7 +39,7 @@ class ListTestWindow : Window {
             if (event.key.key == SDLK_ENTER) {
                 labels ~= new Label(SDL_FRect(0, 0, 200, FONT_HEIGHT), renderer,
                         font, (labels.length+100).to!string);
-                list.addChild(cast(Widget*)&labels.back);
+                list.addChild(labels.back);
                 list.applyStyleToChildren();
             } else if (event.key.key == SDLK_BACKSPACE) {
                 if (labels.empty)

@@ -14,7 +14,6 @@ class List : Container {
 
     this (SDL_FRect rect, SDL_Renderer *renderer, int spacing, Orientation
             orientation) {
-        this.type = WidgetTypes.List;
         super(rect, renderer, spacing, orientation);
         this.element_size = 0;
     }
@@ -26,14 +25,14 @@ class List : Container {
         assert(0);
     }
 
-    void addChild(W)(W* w) if (is(W : Widget)) {
+    void addChild(W)(W w) if (is(W : Widget)) {
         if (children.empty && element_size == 0) {
             if (orientation == Orientation.Vertical)
                 element_size = w.rect.h;
             else
                 element_size = w.rect.w;
         }
-        children ~= cast(Widget*)w;
+        children ~= w;
         adjustLayout();
     }
 

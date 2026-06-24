@@ -39,10 +39,10 @@ class Launcher : Window {
         // box.style.border_color = SDL_Color(100, 20, 20, 255);
         box.uniform = false;
 
-        box.addChild(cast(Widget*)&text_input);
-        box.addChild(cast(Widget*)&icon_list);
+        box.addChild(text_input);
+        box.addChild(icon_list);
         box.applyStyleToChildren();
-        widget = cast(Widget*)&box;
+        widget = box;
         icon_list.updateList();
     }
 
@@ -62,11 +62,11 @@ class Launcher : Window {
         if (ti_s != text_input.text) {
             icon_list.entries = findInEntries(entries, text_input.text[0..$-1]);
             icon_list.updateList();
-            box.rect.h = text_input.rect.h + icon_list.list.idealHeight() +
+            box.rect.h = text_input.rect.h + icon_list.idealHeight() +
                 spacing * 3;
             SDL_SetWindowSize(window, cast(int)box.rect.w, cast(int)box.rect.h);
-            icon_list.rect.h = icon_list.list.idealHeight();
-            icon_list.list.rect.h = icon_list.list.idealHeight();
+            icon_list.rect.h = icon_list.idealHeight();
+            icon_list.rect.h = icon_list.idealHeight();
             box.adjustLayout();
         }
     }

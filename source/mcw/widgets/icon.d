@@ -8,7 +8,6 @@ class Icon : Widget {
 
     this (SDL_FRect rect, SDL_Renderer *renderer, SDL_Texture* texture) {
         super(rect, renderer);
-        this.type = WidgetTypes.Icon;
         this.texture = texture;
     }
 

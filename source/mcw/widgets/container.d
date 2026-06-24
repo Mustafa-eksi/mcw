@@ -16,7 +16,7 @@ abstract class Container : Widget {
     }
     int spacing;
     Orientation orientation;
-    Widget*[] children;
+    Widget[] children;
 
     this (SDL_FRect rect, SDL_Renderer *renderer, int spacing, Orientation
             orientation) {
@@ -25,7 +25,7 @@ abstract class Container : Widget {
         this.orientation = orientation;
     }
 
-    void addChild(Widget* w) {
+    void addChild(W)(W w) if (is(W : Widget)) {
         children ~= w;
         adjustLayout();
     }
@@ -45,10 +45,11 @@ abstract class Container : Widget {
     void applyStyleToChildren() {
         foreach (ref ch; children) {
             ch.style = style;
-            if (ch.type == WidgetTypes.Box)
-                (cast(Box*)ch).applyStyleToChildren();
-            if (ch.type == WidgetTypes.List)
-                (cast(List*)ch).applyStyleToChildren();
+            if (auto b = cast(Box)ch) {
+                b.applyStyleToChildren();
+            } if (auto l = cast(List)ch) {
+                l.applyStyleToChildren();
+            }
         }
     }
 

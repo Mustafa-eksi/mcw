@@ -11,7 +11,7 @@ import mcw.widgets.widget;
 class Window : Widget {
     SDL_Window *window;
     SDL_PropertiesID props;
-    Widget *widget;
+    private Widget _widget;
     bool quit;
 
     this (SDL_FRect rect, string title) {
@@ -58,6 +58,15 @@ class Window : Widget {
         SDL_RenderClear(renderer);
         widget.draw();
         SDL_RenderPresent(renderer);
+    }
+
+    @property void widget(Widget w) {
+        _widget = w;
+        _widget.rect = rect;
+    }
+
+    @property Widget widget() {
+        return _widget;
     }
 
     ~ this() {

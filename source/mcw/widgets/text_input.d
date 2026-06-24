@@ -10,8 +10,6 @@ class TextInput : Label {
     this (SDL_FRect rect, SDL_Renderer *renderer, TTF_Font *font) {
         super(rect, renderer, font, "|");
         this.text_placement = TextPlacement.Start;
-
-        this.type = WidgetTypes.TextInput;
     }
 
     override void handleEvent(SDL_Event *event) {

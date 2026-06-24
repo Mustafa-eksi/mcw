@@ -3,16 +3,12 @@ module mcw.widgets.widget;
 import bindbc.sdl;
 import mcw.widgets.styling;
 
-enum WidgetTypes {
-    Unknown = 0, Box, IconList, TextInput, Label, List, Icon,
-}
-
 class Widget {
     private SDL_FRect _rect;
     SDL_Renderer *renderer;
     Style style;
-    bool visible=true;
-    WidgetTypes type;
+    bool visible = true;
+
 
     this (SDL_FRect rect, SDL_Renderer *renderer) {
         this._rect = rect;
