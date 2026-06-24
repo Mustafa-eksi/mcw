@@ -3,6 +3,6 @@ module mcw.widgets.styling;
 import bindbc.sdl;
 
 struct Style {
-    SDL_Color background_color, border_color;
+    SDL_Color background_color, border_color, focused_border_color;
     int border_width, border_radius;
 }

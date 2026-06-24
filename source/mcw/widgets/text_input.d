@@ -12,7 +12,11 @@ class TextInput : Label {
         this.text_placement = TextPlacement.Start;
     }
 
+
+
     override void handleEvent(SDL_Event *event) {
+        if (event.type != SDL_EVENT_KEY_DOWN)
+            return;
         text.length--;
         if (SDLK_A <= event.key.key && SDLK_Z >= event.key.key) {
             if (event.key.mod & SDL_KMOD_SHIFT) {

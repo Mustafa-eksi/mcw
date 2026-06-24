@@ -22,6 +22,7 @@ class LayoutTestWindow : Window {
         main_box = new Box(rect, renderer, 5, Box.Orientation.Vertical);
         main_box.style.background_color = SDL_Color(100, 0, 0, 255);
         main_box.style.border_color = SDL_Color(0, 100, 0, 255);
+        main_box.style.focused_border_color = SDL_Color(100, 50, 200, 255);
 
         for (int i = 0; i < 5; i++) {
             boxes ~= new Box(rect, renderer, 5, Box.Orientation.Horizontal);

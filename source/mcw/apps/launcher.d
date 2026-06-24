@@ -4,6 +4,7 @@ import std.stdio : writeln;
 import std.range : empty, front;
 import std.process : executeShell;
 import std.algorithm.iteration : map;
+import std.conv : to;
 
 import bindbc.sdl;
 
@@ -37,6 +38,7 @@ class Launcher : Window {
                 spacing, Box.Orientation.Vertical);
         // box.style.background_color = SDL_Color(50, 20, 20, 255);
         // box.style.border_color = SDL_Color(100, 20, 20, 255);
+        box.style.focused_border_color = SDL_Color(100, 50, 200, 255);
         box.uniform = false;
 
         box.addChild(text_input);
@@ -44,11 +46,46 @@ class Launcher : Window {
         box.applyStyleToChildren();
         widget = box;
         icon_list.updateList();
+        box.focused = true;
+        text_input.focused = true;
+        box.focused_child = 0;
     }
 
     override void handleEvent(SDL_Event *event) {
         string ti_s = text_input.text;
         this.Window.handleEvent(event);
+
+        if (event.type != SDL_EVENT_KEY_DOWN)
+            return;
+
+        if (event.key.key == SDLK_DOWN) {
+            if (icon_list.focused_child == -1) {
+                icon_list.focused = true;
+                icon_list.focused_child = 0;
+                icon_list.children[0].focused = true;
+            } else {
+                icon_list.children[icon_list.focused_child].focused = false;
+                icon_list.focused_child++;
+                if (icon_list.focused_child >= icon_list.children.length)
+                    icon_list.focused_child = 0;
+                icon_list.children[icon_list.focused_child].focused = true;
+            }
+            return;
+        }
+        if (event.key.key == SDLK_UP) {
+            if (icon_list.focused_child == -1) {
+                icon_list.focused = true;
+                icon_list.focused_child = icon_list.children.length.to!int-1;
+                icon_list.children[icon_list.focused_child].focused = true;
+            } else {
+                icon_list.children[icon_list.focused_child].focused = false;
+                icon_list.focused_child--;
+                if (icon_list.focused_child < 0)
+                    icon_list.focused_child = icon_list.children.length.to!int-1;
+                icon_list.children[icon_list.focused_child].focused = true;
+            }
+            return;
+        }
         if (event.key.key == SDLK_ENTER) {
             auto fe = findInEntries(entries, text_input.text[0..$-1]);
             if (!fe.empty) {
@@ -57,6 +94,10 @@ class Launcher : Window {
             } else {
                 // writeln(fe);
             }
+            return;
+        }
+        if (event.key.key == SDLK_ESCAPE) {
+            quit = true;
             return;
         }
         if (ti_s != text_input.text) {

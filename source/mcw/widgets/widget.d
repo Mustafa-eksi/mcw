@@ -9,6 +9,8 @@ class Widget {
     Style style;
     bool visible = true;
 
+    // Only set by the parent container, not by the widget itself
+    bool _focused = false;
 
     this (SDL_FRect rect, SDL_Renderer *renderer) {
         this._rect = rect;
@@ -27,8 +29,12 @@ class Widget {
                 SDL_SetRenderDrawColor(renderer, style.background_color.tupleof);
                 SDL_RenderFillRect(renderer, rectAddr);
             }
-            if (style.border_color.a != 0) {
+            if (style.border_color.a != 0 && (style.focused_border_color.a == 0
+                        || !focused)) {
                 SDL_SetRenderDrawColor(renderer, style.border_color.tupleof);
+                SDL_RenderRect(renderer, rectAddr);
+            } else if (style.focused_border_color.a != 0 && focused) {
+                SDL_SetRenderDrawColor(renderer, style.focused_border_color.tupleof);
                 SDL_RenderRect(renderer, rectAddr);
             }
         }
@@ -45,6 +51,14 @@ class Widget {
 
     @property ref SDL_FRect rect() {
         return _rect;
+    }
+
+    @property bool focused() {
+        return _focused;
+    }
+
+    @property void focused(bool f) {
+        _focused = f;
     }
 
     SDL_FRect *rectAddr() {

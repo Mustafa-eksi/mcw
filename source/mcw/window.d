@@ -39,17 +39,20 @@ class Window : Widget {
             case SDL_EVENT_QUIT:
                 quit = true;
                 break;
+            case SDL_EVENT_WINDOW_MOUSE_ENTER:
+                this.focused = true;
+                widget.focused = true;
+                break;
+            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+                this.focused = false;
+                widget.focused = false;
+                break;
             case SDL_EVENT_WINDOW_RESIZED:
                 // writeln(event.window.data1, " - ", event.window.data2);
                 break;
-            case SDL_EVENT_KEY_UP:
-                if (event.key.key == SDLK_ESCAPE) {
-                    quit = true;
-                    break;
-                }
+            default:
                 widget.handleEvent(event);
                 break;
-            default: break;
         }
     }
 
