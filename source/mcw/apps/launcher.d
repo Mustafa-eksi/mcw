@@ -32,8 +32,9 @@ class Launcher : Window {
         SDL_GetWindowSize(window, &window_width, &window_height);
 
         text_input = new TextInput(SDL_FRect(0, 0, 0, FONT_HEIGHT), renderer, font);
+        SDL_StartTextInput(window);
         icon_list = new IconList(SDL_FRect(0, 0, rect.w, FONT_HEIGHT), renderer,
-                font, 4, spacing);
+                font, 5, spacing);
         box = new Box(SDL_FRect(0, 0, window_width, window_height), renderer,
                 spacing, Box.Orientation.Vertical);
         // box.style.background_color = SDL_Color(50, 20, 20, 255);
@@ -55,41 +56,25 @@ class Launcher : Window {
         string ti_s = text_input.text;
         this.Window.handleEvent(event);
 
+        if (ti_s != text_input.text)
+            updateMatches();
+
         if (event.type != SDL_EVENT_KEY_DOWN)
             return;
 
-        if (event.key.key == SDLK_DOWN) {
-            if (icon_list.focused_child == -1) {
-                icon_list.focused = true;
-                icon_list.focused_child = 0;
-                icon_list.children[0].focused = true;
-            } else {
-                icon_list.children[icon_list.focused_child].focused = false;
-                icon_list.focused_child++;
-                if (icon_list.focused_child >= icon_list.children.length)
-                    icon_list.focused_child = 0;
-                icon_list.children[icon_list.focused_child].focused = true;
-            }
-            return;
-        }
-        if (event.key.key == SDLK_UP) {
-            if (icon_list.focused_child == -1) {
-                icon_list.focused = true;
-                icon_list.focused_child = icon_list.children.length.to!int-1;
-                icon_list.children[icon_list.focused_child].focused = true;
-            } else {
-                icon_list.children[icon_list.focused_child].focused = false;
-                icon_list.focused_child--;
-                if (icon_list.focused_child < 0)
-                    icon_list.focused_child = icon_list.children.length.to!int-1;
-                icon_list.children[icon_list.focused_child].focused = true;
-            }
+        if (event.key.key == SDLK_DOWN || event.key.key == SDLK_UP) {
+            if (!icon_list.entries.empty)
+                icon_list.handleEvent(event);
             return;
         }
         if (event.key.key == SDLK_ENTER) {
-            auto fe = findInEntries(entries, text_input.text[0..$-1]);
+            auto fe = findInEntries(entries, text_input.text);
             if (!fe.empty) {
-                executeShell(fe.front.exec);
+                int selected = icon_list.selectedIndex;
+                if (selected >= 0 && selected < icon_list.entries.length)
+                    executeShell(icon_list.entries[selected].exec);
+                else
+                    executeShell(fe.front.exec);
                 quit = true;
             } else {
                 // writeln(fe);
@@ -100,16 +85,19 @@ class Launcher : Window {
             quit = true;
             return;
         }
-        if (ti_s != text_input.text) {
-            icon_list.entries = findInEntries(entries, text_input.text[0..$-1]);
-            icon_list.updateList();
-            box.rect.h = text_input.rect.h + icon_list.idealHeight() +
-                spacing * 3;
-            SDL_SetWindowSize(window, cast(int)box.rect.w, cast(int)box.rect.h);
-            icon_list.rect.h = icon_list.idealHeight();
-            icon_list.rect.h = icon_list.idealHeight();
-            box.adjustLayout();
-        }
+    }
+
+    private void updateMatches() {
+        icon_list.clearSelection();
+        icon_list.entries = findInEntries(entries, text_input.text);
+        icon_list.updateList();
+        SDL_FRect icon_rect = icon_list.rect;
+        icon_rect.h = icon_list.idealHeight();
+        icon_list.rect = icon_rect;
+        SDL_FRect box_rect = box.rect;
+        box_rect.h = text_input.rect.h + icon_rect.h + spacing * 3;
+        box.rect = box_rect;
+        SDL_SetWindowSize(window, cast(int)box_rect.w, cast(int)box_rect.h);
     }
 
     override void draw() {

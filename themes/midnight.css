@@ -1,0 +1,31 @@
+/* Deep blue palette, close to the showcase's original colors. */
+* { color: #e9edf7; }
+Tabs { background: #171b27; selection-color: #5a5a78; }
+Canvas.panel { background: #171b27; }
+Label.muted { color: #9ca8bf; }
+Label.status { background: #242b3c; border: 1px solid #44526c; }
+Label.card { background: #2b3549; }
+Label.row { background: #2f384e; }
+Label.row-alt { background: #273043; }
+Widget.base-widget { background: #4c7899; border: 1px solid #b4e0f7; }
+Image.image-frame { background: #263045; border: 1px solid #6280b9; }
+Box.layout-box { background: #283042; }
+Button { background: #304a7e; border: 1px solid #6280b9;
+    focused-border-color: #f9bf5c; hover-color: #4369ab;
+    pressed-color: #203b67; disabled-color: #41444c;
+    border-radius: 5px; padding: 3px 7px; }
+Button.theme-choice { border-width: 2px; }
+Button.active-theme { border: 3px solid #f9bf5c; }
+CheckBox, RadioButton, ComboBox { background: #2d3549; }
+TextInput { background: #282f40; border: 1px solid #6b80a0;
+    focused-border-color: #f9bf5c; selection-color: #3c5faa;
+    padding: 4px 6px; }
+List, SelectableList { background: #242b3c; }
+ListItem { background: #2e384d; selection-color: #465a8c; }
+ScrollView { border: 1px solid #7082a5; }
+Menu { background: #2a3143; border: 1px solid #7082a5; }
+MenuItem { background: #313e53; }
+Tooltip { background: #44496e; border-radius: 4px; }
+Slider { track-color: #65799b; thumb-color: #f9bf5c; }
+ProgressBar { background: #2a303e; fill-color: #5abe6e; }
+Separator { fill-color: #a0a0a0; }

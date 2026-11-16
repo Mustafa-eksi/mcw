@@ -19,34 +19,76 @@ const uint WINDOW_VERTICAL_PADDING = 10;
 const uint PROMPT_BOTTOM_MARGIN = 20;
 
 int main(string[] args) {
-    if (args.length < 2)
+    if (args.length < 2) {
+        writeln("Usage: mcw <launcher|test|test_list|dialog|showcase>");
         return -1;
+    }
 
     if (mcwInitAll() != 0) {
         return -1;
     }
     scope(exit) mcwQuitAll();
 
-    TTF_Font *font = TTF_OpenFont("liberation-sans.ttf", TEXT_FONT_SIZE);
-
-    Window[string] windows;
-    windows["launcher"] = cast(Window)new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
-    windows["test"] = cast(Window)new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);
-    windows["test_list"] = cast(Window)new ListTestWindow(SDL_FRect(0, 0, 800, 600), "test_list", font);
     string current_window = args[1];
-    if (current_window !in windows) {
+    if (current_window != "launcher" && current_window != "test" &&
+            current_window != "test_list" && current_window != "dialog" &&
+            current_window != "showcase") {
         writeln("Invalid window name: ", current_window);
         return -1;
     }
+    TTF_Font *font = TTF_OpenFont("liberation-sans.ttf",
+            current_window == "showcase" ? 17 : TEXT_FONT_SIZE);
+    if (font is null) {
+        writeln("Could not open liberation-sans.ttf: ", SDL_GetError());
+        return -1;
+    }
+    scope(exit) TTF_CloseFont(font);
 
-    SDL_ShowWindow(windows[current_window].window);
+    Window current;
+    switch (current_window) {
+    case "launcher":
+        current = new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
+        break;
+    case "test":
+        current = new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);
+        break;
+    case "test_list":
+        current = new ListTestWindow(SDL_FRect(0, 0, 800, 600), "test_list", font);
+        break;
+    case "dialog":
+        current = new DialogExampleWindow(SDL_FRect(0, 0, 600, 260), "dialog", font);
+        break;
+    case "showcase":
+        current = new WidgetShowcaseWindow(SDL_FRect(0, 0, 1100, 760),
+                "MCW widget showcase", font);
+        break;
+    default: assert(false);
+    }
+    scope(exit) destroy(current);
 
-    while (!windows[current_window].quit) {
+    SDL_ShowWindow(current.window);
+    current.draw();
+
+    while (!current.quit) {
         SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            windows[current_window].handleEvent(&event);
+        int timeout = current.idleTimeoutMs();
+        bool received = timeout < 0 ? SDL_WaitEvent(&event) :
+            SDL_WaitEventTimeout(&event, timeout);
+        bool redraw = false;
+        if (received) {
+            do {
+                if (event.type != SDL_EVENT_POLL_SENTINEL) {
+                    current.handleEvent(&event);
+                    redraw = true;
+                }
+            } while (SDL_PollEvent(&event));
+        } else if (timeout >= 0) {
+            redraw = current.onIdle();
+        } else {
+            writeln("Could not wait for window events: ", SDL_GetError());
+            return -1;
         }
-        windows[current_window].draw();
+        if (redraw && !current.quit) current.draw();
     }
 
     return 0;

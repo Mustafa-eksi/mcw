@@ -20,7 +20,18 @@ class List : Container {
 
     int idealHeight() {
         if (orientation == Orientation.Vertical) {
-            return (element_size+spacing).to!int*children.length.to!int+spacing.to!int;
+            int count;
+            foreach (child; children) if (child.visible) count++;
+            return (element_size+spacing).to!int * count + spacing;
+        }
+        assert(0);
+    }
+
+    int idealWidth() {
+        if (orientation == Orientation.Horizontal) {
+            int count;
+            foreach (child; children) if (child.visible) count++;
+            return (element_size+spacing).to!int * count + spacing;
         }
         assert(0);
     }
@@ -37,10 +48,9 @@ class List : Container {
     }
 
     override void adjustLayout() {
-        float ycursor = rect.y + spacing;
-        float xcursor = rect.x + spacing;
-
-        float maxw = 0, maxh = 0;
+        auto s = computedStyle();
+        float ycursor = rect.y + spacing + s.padding_top;
+        float xcursor = rect.x + spacing + s.padding_left;
 
         float h = element_size;
         float w = element_size;
@@ -50,22 +60,21 @@ class List : Container {
         foreach (i, ref ch; children) {
             if (!ch.visible)
                 continue;
-            ch.rect.x = xcursor;
-            ch.rect.y = ycursor;
+            SDL_FRect child_rect = ch.rect;
+            child_rect.x = xcursor;
+            child_rect.y = ycursor;
 
             if (orientation == Orientation.Vertical) {
-                ch.rect.h = h;
-                ycursor += ch.rect.h + spacing;
-                maxw = max(maxw, ch.rect.w);
-                ch.rect.w = rect.x+(rect.w-spacing)-ch.rect.x;
+                child_rect.h = h;
+                ycursor += child_rect.h + spacing;
+                child_rect.w = max(0.0f, rect.x+(rect.w-spacing-s.padding_right)-child_rect.x);
             } else {
-                ch.rect.w = w;
-                xcursor += ch.rect.w + spacing;
-                maxh = max(maxh, ch.rect.h);
-                ch.rect.h = rect.y+(rect.h-spacing)-ch.rect.y;
+                child_rect.w = w;
+                xcursor += child_rect.w + spacing;
+                child_rect.h = max(0.0f, rect.y+(rect.h-spacing-s.padding_bottom)-child_rect.y);
             }
 
-            ch.hasMoved();
+            ch.rect = child_rect;
         }
     }
 }

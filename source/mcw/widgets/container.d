@@ -16,6 +16,8 @@ abstract class Container : Widget {
         Horizontal
     }
     int spacing;
+    int cssBaseSpacing;
+    bool cssGapApplied;
     Orientation orientation;
     Widget[] children;
     int focused_child = -1;
@@ -24,6 +26,7 @@ abstract class Container : Widget {
             orientation) {
         super(rect, renderer);
         this.spacing = spacing;
+        this.cssBaseSpacing = spacing;
         this.orientation = orientation;
     }
 
@@ -34,45 +37,70 @@ abstract class Container : Widget {
 
     void removeChild(int i) {
         assert(0 <= i && i < children.length);
-        if (i == focused_child)
+        if (i == focused_child) {
+            children[i].focused = false;
             focused_child = -1;
+        } else if (i < focused_child) {
+            focused_child--;
+        }
         children = children.remove(i);
         adjustLayout();
     }
 
     override void handleEvent(SDL_Event *event) {
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-            foreach (i, ref ch; children) {
-                if (ch.visible &&
-                        ch.rect.x <= event.button.x &&
-                        event.button.x <= ch.rect.x+ch.rect.w &&
-                        ch.rect.y <= event.button.y &&
-                        event.button.y <= ch.rect.y+ch.rect.h) {
+        if (event is null || !enabled || !visible)
+            return;
+        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            foreach (ch; children) {
+                ch.hovered = ch.enabled && ch.contains(event.motion.x, event.motion.y);
+                if (ch.visible && ch.enabled)
+                    ch.handleEvent(event);
+            }
+            return;
+        }
+        if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+            foreach_reverse (ch; children) {
+                if (ch.enabled && ch.contains(event.wheel.mouseX,
+                            event.wheel.mouseY)) {
+                    ch.handleEvent(event);
+                    return;
+                }
+            }
+        }
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+            // Children draw front to back; the last drawn hit receives the click.
+            foreach_reverse (i, ch; children) {
+                if (ch.visible && ch.enabled &&
+                        ch.contains(event.button.x, event.button.y)) {
                     if (focused_child != -1 && focused_child != i.to!int)
                         children[focused_child].focused = false;
                     focused_child = i.to!int;
                     ch.focused = true;
+                    ch.focusVisible = false;
+                    break;
+                }
+            }
+        }
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_TAB) {
+            int next = focused_child;
+            foreach (_; 0 .. children.length) {
+                next = (next + ((event.key.mod & SDL_KMOD_SHIFT) ?
+                    cast(int) children.length - 1 : 1)) % cast(int) children.length;
+                if (children[next].visible && children[next].enabled &&
+                        children[next].focusable) {
+                    if (focused_child != -1)
+                        children[focused_child].focused = false;
+                    focused_child = next;
+                    children[next].focused = true;
+                    children[next].focusVisible = true;
+                    *event = SDL_Event();
+                    return;
                 }
             }
         }
         if (focused_child != -1) {
             children[focused_child].handleEvent(event);
-        }
-        if (event && event.type == SDL_EVENT_KEY_DOWN && focused_child != -1) {
-            if (event.key.key == SDLK_TAB) {
-                children[focused_child].focused = false;
-                if (event.key.mod & SDL_KMOD_SHIFT) {
-                    focused_child--;
-                    if (focused_child < 0)
-                        focused_child = children.length.to!int-1;
-                } else {
-                    focused_child++;
-                    if (focused_child >= children.length)
-                        focused_child = 0;
-                }
-                children[focused_child].focused = true;
-                *event = SDL_Event();
-            }
         }
     }
 
@@ -83,6 +111,10 @@ abstract class Container : Widget {
             children[focused_child].focused = false;
             focused_child = -1;
         }
+    }
+
+    @property override bool focused() {
+        return this.Widget.focused;
     }
 
     void applyStyleToChildren() {

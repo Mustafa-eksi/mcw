@@ -56,18 +56,21 @@ DesktopEntry[] indexEntries(SDL_Renderer *renderer) {
             auto iconpath = iconfiles.find!(e =>
                     !entries.back.icon.empty && e.split('/').back.startsWith(entries.back.icon));
             if (!iconpath.empty) {
-                entries.back.icon_texture =
-                    SDL_CreateTextureFromSurface(renderer, IMG_Load(iconpath[0].toStringz));
+                SDL_Surface *surface = IMG_Load(iconpath[0].toStringz);
+                if (surface) {
+                    entries.back.icon_texture = SDL_CreateTextureFromSurface(renderer, surface);
+                    SDL_DestroySurface(surface);
+                }
             }
         }
     }
     return entries;
 }
 
-DesktopEntry[] findInEntries(DesktopEntry[] entries, string search, int limit=4) {
+DesktopEntry[] findInEntries(DesktopEntry[] entries, string search, int limit=5) {
     DesktopEntry[] filtered = [];
     foreach (entry; entries) {
-        if (filtered.length > limit)
+        if (filtered.length >= limit)
             break;
         if (entry.name.toLower.startsWith(search.toLower))
             filtered ~= entry;

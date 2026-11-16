@@ -8,6 +8,7 @@ mcw.dylib
 mcw.dll
 libmcw.a
 mcw.a
+test-output/
 mcw.lib
 mcw-test-*
 *.exe

@@ -48,7 +48,8 @@ class Window : Widget {
                 widget.focused = false;
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
-                // writeln(event.window.data1, " - ", event.window.data2);
+                rect = SDL_FRect(rect.x, rect.y, event.window.data1, event.window.data2);
+                widget.rect = rect;
                 break;
             default:
                 widget.handleEvent(event);
@@ -63,6 +64,11 @@ class Window : Widget {
         SDL_RenderPresent(renderer);
     }
 
+    // Windows with timed work can wake the event loop without redrawing unless
+    // that work changed something visible.
+    int idleTimeoutMs() { return -1; }
+    bool onIdle() { return false; }
+
     @property void widget(Widget w) {
         _widget = w;
         _widget.rect = rect;
@@ -74,7 +80,7 @@ class Window : Widget {
 
     ~ this() {
         SDL_DestroyProperties(props);
-        SDL_DestroyWindow(window);
         SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
     }
 }

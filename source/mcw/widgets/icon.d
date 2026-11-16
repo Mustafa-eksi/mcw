@@ -16,9 +16,4 @@ class Icon : Widget {
         SDL_RenderTexture(renderer, texture, null, rectAddr);
     }
 
-    ~this() {
-        if (texture !is null) {
-            SDL_DestroyTexture(texture);
-        }
-    }
 }
