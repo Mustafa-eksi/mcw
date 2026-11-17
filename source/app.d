@@ -20,9 +20,17 @@ const uint PROMPT_BOTTOM_MARGIN = 20;
 
 int main(string[] args) {
     if (args.length < 2) {
-        writeln("Usage: mcw <launcher|test|test_list|dialog|showcase>");
+        writeln("Usage: mcw <launcher|test|test_list|dialog|showcase|bar>");
         return -1;
     }
+
+    // Wayland does not allow ordinary windows to select an absolute position.
+    // Use XWayland for the bar when it is available and no driver was chosen.
+    if (args[1] == "bar" && environment.get("XDG_SESSION_TYPE", "") == "wayland" &&
+            environment.get("DISPLAY", "").length &&
+            !environment.get("SDL_VIDEO_DRIVER", "").length &&
+            !environment.get("SDL_VIDEODRIVER", "").length)
+        environment["SDL_VIDEO_DRIVER"] = "x11,wayland";
 
     if (mcwInitAll() != 0) {
         return -1;
@@ -32,12 +40,13 @@ int main(string[] args) {
     string current_window = args[1];
     if (current_window != "launcher" && current_window != "test" &&
             current_window != "test_list" && current_window != "dialog" &&
-            current_window != "showcase") {
+            current_window != "showcase" && current_window != "bar") {
         writeln("Invalid window name: ", current_window);
         return -1;
     }
     TTF_Font *font = TTF_OpenFont("liberation-sans.ttf",
-            current_window == "showcase" ? 17 : TEXT_FONT_SIZE);
+            current_window == "showcase" ? 17 :
+            current_window == "bar" ? 15 : TEXT_FONT_SIZE);
     if (font is null) {
         writeln("Could not open liberation-sans.ttf: ", SDL_GetError());
         return -1;
@@ -62,11 +71,24 @@ int main(string[] args) {
         current = new WidgetShowcaseWindow(SDL_FRect(0, 0, 1100, 760),
                 "MCW widget showcase", font);
         break;
+    case "bar":
+        SDL_Rect displayBounds;
+        if (!SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &displayBounds))
+            displayBounds = SDL_Rect(0, 0, 1280, 720);
+        current = new BarWindow(SDL_FRect(0, 0, displayBounds.w, 44),
+                "MCW bar", font);
+        SDL_SetWindowPosition(current.window, displayBounds.x, displayBounds.y);
+        break;
     default: assert(false);
     }
     scope(exit) destroy(current);
 
     SDL_ShowWindow(current.window);
+    if (current_window == "bar") {
+        SDL_Rect displayBounds;
+        if (SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &displayBounds))
+            SDL_SetWindowPosition(current.window, displayBounds.x, displayBounds.y);
+    }
     current.draw();
 
     while (!current.quit) {

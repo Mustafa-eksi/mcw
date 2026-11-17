@@ -15,7 +15,7 @@ class Label : Widget {
     TTF_Text *ttf_text;
     TTF_Font *font;
     enum TextPlacement {
-        Start, Center
+        Start, StartCenter, Center
     }
     TextPlacement _tp = TextPlacement.Center;
     float text_x, text_y;
@@ -55,6 +55,10 @@ class Label : Widget {
         case TextPlacement.Start:
             text_x = left + textStartOffset();
             text_y = top;
+            break;
+        case TextPlacement.StartCenter:
+            text_x = left + textStartOffset();
+            text_y = top + (height - FONT_HEIGHT) / 2;
             break;
         case TextPlacement.Center:
             text_x = left + max(0.0f, (width - text_width) / 2);
