@@ -22,6 +22,28 @@ The Themes tab offers Midnight, Daylight, Forest, and Sunset. Press F1–F4 to
 switch palettes from any tab. Edit the active file under `themes/` while the
 showcase runs; it reloads automatically. Press F5 to check the file immediately.
 
+Run the application launcher from the repository root:
+
+```sh
+dub run --compiler=ldc2 -- launcher
+```
+
+Type to search installed applications; the launcher shrinks as results narrow.
+Use Up/Down and Enter to open a result. Escape closes it, and F1–F4 switch its
+theme. Icons come from XDG user and system locations; missing icons use a letter
+badge.
+
+The selected theme is saved in `~/.config/mcw/launcher.conf` and restored the
+next time the launcher opens. If `XDG_CONFIG_HOME` is set, the file lives under
+`$XDG_CONFIG_HOME/mcw/launcher.conf` instead. The file contains, for example,
+`theme=forest`.
+
+The search field also accepts modes: `>` lists launcher commands (theme changes
+and exit), `!` runs a Bash command, `=` calculates an expression, and `?` opens
+a web search in the default browser. Press Enter to run a command or search.
+Math mode supports arithmetic, powers, parentheses, `pi`, `e`, and functions
+such as `sqrt`, `sin`, `cos`, `tan`, `abs`, `ln`, and `log`.
+
 # Desktop bar
 
 Run the KDE bar from the repository root:
@@ -38,13 +60,17 @@ pause or resume, and next buttons. Escape closes an open popup without closing
 the bar.
 
 The popup uses installed Breeze theme icons to adjust volume and screen
-brightness, toggle the `power-saver` profile, keep KDE from sleeping, open
-Bluetooth settings, and access a power and session submenu. The power off, log
-off, and restart buttons open KDE's confirmation
-prompt. The sleep button suspends the machine.
+brightness, toggle the `power-saver` profile, and keep KDE from sleeping.
+Its Wi-Fi submenu can switch Wi-Fi on or off, refresh nearby networks, and
+connect to one. Its Bluetooth submenu can switch the adapter on or off, scan
+for devices, pair, connect, disconnect, and open KDE Bluetooth settings. The
+power and session submenu provides power off, log off, restart, and sleep.
+Power off, log off, and restart open KDE's confirmation prompt; sleep suspends
+the machine.
 
 It uses `busctl`, `qdbus6`, `pactl`, `powerprofilesctl`, `kde-inhibit`,
-`kcmshell6`, and `systemctl`; remote album artwork also uses `curl`. Missing
+`nmcli`, `bluetoothctl`, `kcmshell6`, and `systemctl`; remote album artwork
+also uses `curl`. Missing
 services appear unavailable. On KDE Wayland, the bar uses XWayland when available
 so it can start at the top of the screen. The SDL window stays above ordinary
 windows but does not reserve screen space as a native Plasma panel would.

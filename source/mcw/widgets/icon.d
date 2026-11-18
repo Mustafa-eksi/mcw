@@ -13,7 +13,8 @@ class Icon : Widget {
 
     override void draw() {
         this.Widget.draw();
-        SDL_RenderTexture(renderer, texture, null, rectAddr);
+        if (texture !is null)
+            SDL_RenderTexture(renderer, texture, null, rectAddr);
     }
 
 }

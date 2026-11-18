@@ -2,7 +2,7 @@ module mcw.apps.bar;
 
 import std.algorithm : min, max;
 import std.conv : to;
-import std.datetime : Clock, SysTime;
+import std.datetime : Clock, SysTime, dur;
 import std.file : FileException, isFile, remove, tempDir;
 import std.math : sqrt;
 import std.path : buildPath;
@@ -11,6 +11,7 @@ import std.string : toStringz, startsWith;
 import std.uri : decode;
 import std.uuid : randomUUID;
 import core.sys.posix.unistd : getpid;
+import core.thread : Thread;
 
 import bindbc.sdl;
 import mcw.bar_services;
@@ -21,6 +22,101 @@ private enum bg = SDL_Color(22, 27, 37, 255);
 private enum panelBg = SDL_Color(31, 38, 52, 255);
 private enum accent = SDL_Color(101, 178, 227, 255);
 private enum muted = SDL_Color(171, 185, 204, 255);
+
+private enum DeviceOperation { wifiList, wifiPower, wifiConnect,
+    bluetoothList, bluetoothPower, bluetoothConnect }
+
+private struct DeviceRequest {
+    DeviceOperation operation;
+    bool option;
+    BarWifiNetwork network;
+    BarBluetoothDevice device;
+}
+
+// The worker only calls BarServices. Widgets and SDL windows stay on the UI thread.
+private class DeviceJob {
+    BarServices services;
+    DeviceRequest request;
+    Thread thread;
+    BarWifiNetwork[] wifi;
+    BarBluetoothDevice[] bluetooth;
+    bool succeeded;
+    string error;
+    private bool finished;
+
+    this(BarServices services, DeviceRequest request) {
+        this.services = services;
+        this.request = request;
+        thread = new Thread(&run);
+        thread.start();
+    }
+
+    private void run() {
+        try {
+            services.error = "";
+            final switch (request.operation) {
+            case DeviceOperation.wifiList:
+                wifi = services.wifiNetworks(request.option);
+                succeeded = true;
+                break;
+            case DeviceOperation.wifiPower:
+                succeeded = services.setWifiEnabled(request.option);
+                break;
+            case DeviceOperation.wifiConnect:
+                succeeded = services.connectWifi(request.network);
+                break;
+            case DeviceOperation.bluetoothList:
+                bluetooth = services.bluetoothDevices(request.option);
+                succeeded = true;
+                break;
+            case DeviceOperation.bluetoothPower:
+                succeeded = services.setBluetoothEnabled(request.option);
+                break;
+            case DeviceOperation.bluetoothConnect:
+                succeeded = services.connectBluetooth(request.device);
+                break;
+            }
+            error = services.error;
+        } catch (Exception e) {
+            succeeded = false;
+            error = e.msg;
+        }
+        synchronized (this) { finished = true; }
+    }
+
+    bool done() { synchronized (this) return finished; }
+    void join() { thread.join(); }
+}
+
+private class StatusJob {
+    BarState state;
+    uint deviceGeneration;
+    Thread thread;
+    private bool finished;
+    bool succeeded;
+
+    this(BarState previous, uint deviceGeneration) {
+        this.state = previous;
+        this.deviceGeneration = deviceGeneration;
+        thread = new Thread(&run);
+        thread.start();
+    }
+
+    private void run() {
+        try {
+            auto reader = new BarServices();
+            reader.state = state;
+            reader.refresh();
+            state = reader.state;
+            destroy(reader);
+            succeeded = true;
+        } catch (Exception) {}
+        synchronized (this) { finished = true; }
+    }
+
+    bool done() { synchronized (this) return finished; }
+    void join() { thread.join(); }
+}
 
 private bool regularFile(string path) {
     try return isFile(path);
@@ -220,31 +316,54 @@ class BarWindow : Window {
     BarServices services;
     Window controlWindow;
     Window mediaWindow;
+    Window trayMenuWindow;
     Canvas bar;
     Canvas controls;
     Canvas mediaPanel;
+    Canvas trayMenuPanel;
     TTF_Font *font;
     Button[] desktops;
     TrayButton[] trayButtons;
     BarTrayItem[] trayItems;
     Button artButton;
     IconButton previous, playPause, next, compactPlay, controlButton, powerButton,
-        saveButton, inhibitButton, bluetoothButton, volumeIcon, brightnessIcon;
+        saveButton, inhibitButton, bluetoothButton, wifiButton, wifiBack,
+        wifiRefresh, bluetoothBack, bluetoothRefresh, bluetoothSettings,
+        volumeIcon, brightnessIcon;
     IconButton[4] powerActions;
-    Label clockLabel, trackLabel, popupTrackLabel, timeLabel, volumeLabel, brightnessLabel, profileLabel, statusLabel;
+    Button wifiToggle, wifiPrevious, wifiNext;
+    Button[5] wifiRows;
+    Label wifiHeading, wifiEmpty;
+    BarWifiNetwork[] wifiNetworks;
+    size_t wifiPage;
+    Button bluetoothToggle, bluetoothPrevious, bluetoothNext;
+    Button[5] bluetoothRows;
+    Label bluetoothHeading, bluetoothEmpty;
+    BarBluetoothDevice[] bluetoothDevices;
+    size_t bluetoothPage;
+    Label clockLabel, trackLabel, popupTrackLabel, timeLabel, volumeLabel,
+        brightnessLabel, controlsHeading, statusLabel;
     Image artwork, bigArtwork;
     CommitSlider seekSlider, volumeSlider, brightnessSlider;
     SDL_Texture *artTexture, popupArtTexture;
     string artUrl;
     string downloadedArtPath;
-    string hoveredHint;
-    bool controlsOpen, mediaOpen, powerOpen;
+    BarTrayItem trayMenuItem;
+    int[] trayMenuPath;
+    bool controlsOpen, mediaOpen, powerOpen, trayMenuOpen, wifiOpen, bluetoothOpen;
+    bool wifiLoading, bluetoothLoading, deviceQueued;
+    DeviceRequest queuedDevice;
+    DeviceJob deviceJob;
+    StatusJob statusJob;
+    uint deviceGeneration;
     uint idleTicks;
+    SysTime lastMediaTick;
 
     this(SDL_FRect rect, string title, TTF_Font *font) {
-        super(rect, title);
+        super(rect, title, true);
         this.font = font;
         services = new BarServices();
+        lastMediaTick = Clock.currTime();
         SDL_SetWindowBordered(window, false);
         SDL_SetWindowAlwaysOnTop(window, true);
         SDL_SetWindowResizable(window, false);
@@ -252,7 +371,7 @@ class BarWindow : Window {
 
         bar = new Canvas(rect, renderer);
         bar.style.background_color = bg;
-        bar.style.border_radius = 8;
+        bar.style.border_radius = 22;
         widget = bar;
 
         foreach (i; 0 .. 8) {
@@ -265,9 +384,9 @@ class BarWindow : Window {
             bar.addAnchored(button);
             desktops ~= button;
         }
-        artwork = new RoundedArt(SDL_FRect(0, 0, 36, 36), renderer, null, 7, bg);
+        artwork = new RoundedArt(SDL_FRect(0, 0, 36, 36), renderer, null, 18, bg);
         artwork.style.background_color = SDL_Color(48, 57, 73, 255);
-        artwork.style.border_radius = 7;
+        artwork.style.border_radius = 18;
         bar.addAnchored(artwork);
         artButton = new Button(SDL_FRect(0, 0, 36, 36), renderer, font, "");
         artButton.style.focused_border_color = accent;
@@ -286,11 +405,8 @@ class BarWindow : Window {
             auto button = new TrayButton(SDL_FRect(0, 0, 28, 30), renderer, font);
             button.style.background_color = SDL_Color(43, 54, 70, 255);
             button.style.hover_color = SDL_Color(66, 91, 118, 255);
-            button.style.border_radius = 7;
-            button.onActivate = () {
-                if (index < trayItems.length && !services.activateTray(trayItems[index]))
-                    showError();
-            };
+            button.style.border_radius = 100;
+            button.onActivate = trayButtonAction(index);
             bar.addAnchored(button);
             trayButtons ~= button;
         }
@@ -298,20 +414,20 @@ class BarWindow : Window {
         controlButton.onActivate = () { toggleControls(); };
         bar.addAnchored(controlButton);
 
-        mediaWindow = new Window(SDL_FRect(0, 0, 340, 360), "MCW media");
+        mediaWindow = new Window(SDL_FRect(0, 0, 340, 360), "MCW media", true);
         SDL_SetWindowBordered(mediaWindow.window, false);
         SDL_SetWindowAlwaysOnTop(mediaWindow.window, true);
         SDL_SetWindowResizable(mediaWindow.window, false);
         mediaPanel = new Canvas(SDL_FRect(0, 0, 340, 360), mediaWindow.renderer);
         mediaPanel.style.background_color = panelBg;
-        mediaPanel.style.border_radius = 12;
+        mediaPanel.style.border_radius = 26;
         mediaWindow.widget = mediaPanel;
         popupTrackLabel = makeLabel(mediaWindow.renderer, "No media playing", muted);
         place(mediaPanel, popupTrackLabel, 20, 4, 300, 20);
         bigArtwork = new RoundedArt(SDL_FRect(50, 27, 240, 240),
-            mediaWindow.renderer, null, 12, panelBg);
+            mediaWindow.renderer, null, 24, panelBg);
         bigArtwork.style.background_color = SDL_Color(48, 57, 73, 255);
-        bigArtwork.style.border_radius = 12;
+        bigArtwork.style.border_radius = 24;
         mediaPanel.addAnchored(bigArtwork);
         seekSlider = new CommitSlider(SDL_FRect(20, 279, 300, 10), mediaWindow.renderer);
         seekSlider.onCommit = (double percent) {
@@ -331,26 +447,38 @@ class BarWindow : Window {
         place(mediaPanel, playPause, 142, 318, 56, 32);
         place(mediaPanel, next, 209, 318, 56, 32);
 
-        controlWindow = new Window(SDL_FRect(0, 0, 348, 210), "MCW controls");
+        controlWindow = new Window(SDL_FRect(0, 0, 348, 185), "MCW controls", true);
         SDL_SetWindowBordered(controlWindow.window, false);
         SDL_SetWindowAlwaysOnTop(controlWindow.window, true);
         SDL_SetWindowResizable(controlWindow.window, false);
-        controls = new Canvas(SDL_FRect(0, 0, 348, 210), controlWindow.renderer);
+        controls = new Canvas(SDL_FRect(0, 0, 348, 185), controlWindow.renderer);
         controls.style.background_color = panelBg;
-        controls.style.border_radius = 12;
+        controls.style.border_radius = 26;
         controlWindow.widget = controls;
         createControls();
+        trayMenuWindow = new Window(SDL_FRect(0, 0, 240, 40), "MCW tray menu", true);
+        SDL_SetWindowBordered(trayMenuWindow.window, false);
+        SDL_SetWindowAlwaysOnTop(trayMenuWindow.window, true);
+        SDL_SetWindowResizable(trayMenuWindow.window, false);
+        trayMenuPanel = new Canvas(SDL_FRect(0, 0, 240, 40), trayMenuWindow.renderer);
+        trayMenuPanel.style.background_color = panelBg;
+        trayMenuPanel.style.border_radius = 16;
+        trayMenuWindow.widget = trayMenuPanel;
         layout();
         updateState();
     }
 
     ~this() {
+        if (deviceJob !is null) deviceJob.join();
+        if (statusJob !is null) statusJob.join();
         if (artTexture !is null) SDL_DestroyTexture(artTexture);
         if (popupArtTexture !is null) SDL_DestroyTexture(popupArtTexture);
         foreach (button; trayButtons) button.releaseIcon();
         foreach (button; [previous, playPause, next, compactPlay,
                 controlButton, powerButton, saveButton, inhibitButton,
-                bluetoothButton, volumeIcon, brightnessIcon])
+                bluetoothButton, wifiButton, wifiBack, wifiRefresh,
+                bluetoothBack, bluetoothRefresh, bluetoothSettings,
+                volumeIcon, brightnessIcon])
             button.releaseIcon();
         foreach (button; powerActions) button.releaseIcon();
         if (downloadedArtPath.length) {
@@ -359,6 +487,7 @@ class BarWindow : Window {
         }
         destroy(controlWindow);
         destroy(mediaWindow);
+        destroy(trayMenuWindow);
         destroy(services);
     }
 
@@ -368,7 +497,7 @@ class BarWindow : Window {
         button.style.hover_color = SDL_Color(66, 91, 118, 255);
         button.style.pressed_color = SDL_Color(48, 122, 171, 255);
         button.style.focused_border_color = accent;
-        button.style.border_radius = 7;
+        button.style.border_radius = 100;
         button.text_color = SDL_Color(236, 241, 247, 255);
         return button;
     }
@@ -381,7 +510,7 @@ class BarWindow : Window {
         button.style.hover_color = SDL_Color(66, 91, 118, 255);
         button.style.pressed_color = SDL_Color(48, 122, 171, 255);
         button.style.focused_border_color = accent;
-        button.style.border_radius = 7;
+        button.style.border_radius = 100;
         button.text_color = SDL_Color(236, 241, 247, 255);
         return button;
     }
@@ -399,8 +528,8 @@ class BarWindow : Window {
     }
 
     private void createControls() {
-        auto heading = makeLabel(controlWindow.renderer, "Quick controls", accent);
-        place(controls, heading, 18, 10, 220, 28);
+        controlsHeading = makeLabel(controlWindow.renderer, "Quick controls", accent);
+        place(controls, controlsHeading, 18, 10, 278, 28);
         auto closeButton = makeIconButton(controlWindow.renderer, "window-close", "Close");
         closeButton.onActivate = () { closeControls(); };
         place(controls, closeButton, 306, 10, 30, 30);
@@ -439,32 +568,29 @@ class BarWindow : Window {
             if (!services.togglePowerSave()) showError();
             updateState();
         };
-        place(controls, saveButton, 18, 133, 66, 38);
+        place(controls, saveButton, 18, 133, 52, 38);
         inhibitButton = makeIconButton(controlWindow.renderer,
             "system-suspend-inhibited", "Do not sleep");
         inhibitButton.onActivate = () {
             if (!services.toggleInhibit()) showError();
             updateState();
         };
-        place(controls, inhibitButton, 100, 133, 66, 38);
-        profileLabel = makeLabel(controlWindow.renderer, "Profile: unavailable", muted);
-        profileLabel.text_placement = Label.TextPlacement.StartCenter;
-        place(controls, profileLabel, 18, 181, 310, 20);
-
+        place(controls, inhibitButton, 78, 133, 52, 38);
         bluetoothButton = makeIconButton(controlWindow.renderer,
-            "network-bluetooth", "Bluetooth settings");
-        bluetoothButton.onActivate = () {
-            if (!services.openBluetooth()) showError();
-            else closeControls();
-        };
-        place(controls, bluetoothButton, 182, 133, 66, 38);
+            "network-bluetooth", "Bluetooth devices");
+        bluetoothButton.onActivate = () { toggleBluetoothMenu(); };
+        place(controls, bluetoothButton, 138, 133, 52, 38);
+        wifiButton = makeIconButton(controlWindow.renderer,
+            "network-wireless", "Wi-Fi networks");
+        wifiButton.onActivate = () { toggleWifiMenu(); };
+        place(controls, wifiButton, 198, 133, 52, 38);
         powerButton = makeIconButton(controlWindow.renderer,
             "system-shutdown", "Power and session");
         powerButton.onActivate = () { togglePowerMenu(); };
         place(controls, powerButton, 264, 133, 66, 38);
         statusLabel = makeLabel(controlWindow.renderer, "", SDL_Color(238, 166, 144, 255));
         statusLabel.text_placement = Label.TextPlacement.StartCenter;
-        place(controls, statusLabel, 18, 181, 310, 20);
+        place(controls, statusLabel, 18, 10, 278, 28);
         statusLabel.visible = false;
 
         string[4] names = ["Power off", "Log off", "Restart", "Sleep"];
@@ -477,10 +603,95 @@ class BarWindow : Window {
                 if (!services.sessionAction(kind)) showError();
                 else closeControls();
             };
-            place(controls, button, 18 + i * 82, 211, 66, 38);
+            place(controls, button, 18 + i * 82, 181, 66, 38);
             button.visible = false;
             powerActions[i] = button;
         }
+
+        wifiHeading = makeLabel(controlWindow.renderer, "Wi-Fi networks", accent);
+        place(controls, wifiHeading, 18, 181, 190, 30);
+        wifiBack = makeIconButton(controlWindow.renderer, "go-previous", "Back");
+        wifiBack.onActivate = () { toggleWifiMenu(); };
+        place(controls, wifiBack, 218, 181, 44, 30);
+        wifiRefresh = makeIconButton(controlWindow.renderer, "view-refresh", "Refresh");
+        wifiRefresh.onActivate = () { refreshWifiMenu(true); };
+        place(controls, wifiRefresh, 272, 181, 58, 30);
+        wifiToggle = makeButton(controlWindow.renderer, "Turn Wi-Fi on");
+        wifiToggle.onActivate = () {
+            requestDevice(DeviceRequest(DeviceOperation.wifiPower,
+                !services.state.wifiEnabled));
+        };
+        place(controls, wifiToggle, 18, 215, 312, 32);
+        wifiEmpty = makeLabel(controlWindow.renderer, "No networks found", muted);
+        place(controls, wifiEmpty, 18, 252, 312, 30);
+        foreach (i; 0 .. wifiRows.length) {
+            auto row = makeButton(controlWindow.renderer, "");
+            row.text_placement = Label.TextPlacement.StartCenter;
+            row.style.padding_left = 12;
+            row.onActivate = wifiRowAction(i);
+            place(controls, row, 18, 252 + i * 34, 312, 30);
+            wifiRows[i] = row;
+        }
+        wifiPrevious = makeButton(controlWindow.renderer, "‹  Previous");
+        wifiPrevious.onActivate = () {
+            if (wifiPage > 0) { wifiPage--; renderWifiMenu(); }
+        };
+        place(controls, wifiPrevious, 18, 422, 150, 30);
+        wifiNext = makeButton(controlWindow.renderer, "Next  ›");
+        wifiNext.onActivate = () {
+            if ((wifiPage + 1) * wifiRows.length < wifiNetworks.length) {
+                wifiPage++;
+                renderWifiMenu();
+            }
+        };
+        place(controls, wifiNext, 180, 422, 150, 30);
+        setWifiMenuVisible(false);
+
+        bluetoothHeading = makeLabel(controlWindow.renderer, "Bluetooth devices", accent);
+        place(controls, bluetoothHeading, 18, 181, 145, 30);
+        bluetoothSettings = makeIconButton(controlWindow.renderer,
+            "configure", "Bluetooth settings");
+        bluetoothSettings.onActivate = () {
+            if (!services.openBluetooth()) showError();
+            else closeControls();
+        };
+        place(controls, bluetoothSettings, 168, 181, 40, 30);
+        bluetoothBack = makeIconButton(controlWindow.renderer, "go-previous", "Back");
+        bluetoothBack.onActivate = () { toggleBluetoothMenu(); };
+        place(controls, bluetoothBack, 218, 181, 44, 30);
+        bluetoothRefresh = makeIconButton(controlWindow.renderer, "view-refresh", "Scan");
+        bluetoothRefresh.onActivate = () { refreshBluetoothMenu(true); };
+        place(controls, bluetoothRefresh, 272, 181, 58, 30);
+        bluetoothToggle = makeButton(controlWindow.renderer, "Turn Bluetooth on");
+        bluetoothToggle.onActivate = () {
+            requestDevice(DeviceRequest(DeviceOperation.bluetoothPower,
+                !services.state.bluetoothEnabled));
+        };
+        place(controls, bluetoothToggle, 18, 215, 312, 32);
+        bluetoothEmpty = makeLabel(controlWindow.renderer, "No devices found", muted);
+        place(controls, bluetoothEmpty, 18, 252, 312, 30);
+        foreach (i; 0 .. bluetoothRows.length) {
+            auto row = makeButton(controlWindow.renderer, "");
+            row.text_placement = Label.TextPlacement.StartCenter;
+            row.style.padding_left = 12;
+            row.onActivate = bluetoothRowAction(i);
+            place(controls, row, 18, 252 + i * 34, 312, 30);
+            bluetoothRows[i] = row;
+        }
+        bluetoothPrevious = makeButton(controlWindow.renderer, "‹  Previous");
+        bluetoothPrevious.onActivate = () {
+            if (bluetoothPage > 0) { bluetoothPage--; renderBluetoothMenu(); }
+        };
+        place(controls, bluetoothPrevious, 18, 422, 150, 30);
+        bluetoothNext = makeButton(controlWindow.renderer, "Next  ›");
+        bluetoothNext.onActivate = () {
+            if ((bluetoothPage + 1) * bluetoothRows.length < bluetoothDevices.length) {
+                bluetoothPage++;
+                renderBluetoothMenu();
+            }
+        };
+        place(controls, bluetoothNext, 180, 422, 150, 30);
+        setBluetoothMenuVisible(false);
     }
 
     private void layout() {
@@ -506,8 +717,22 @@ class BarWindow : Window {
 
     private void showError() {
         statusLabel.setText(services.error.length ? services.error : "Action unavailable");
-        profileLabel.visible = false;
+        controlsHeading.visible = false;
         statusLabel.visible = true;
+    }
+
+    private void clearError() {
+        controlsHeading.visible = true;
+        statusLabel.visible = false;
+    }
+
+    private void delegate() trayButtonAction(size_t index) {
+        return () {
+            if (index >= trayItems.length) return;
+            if (trayItems[index].itemIsMenu)
+                openTrayMenu(trayItems[index], trayButtons[index].rect.x);
+            else if (!services.activateTray(trayItems[index])) showError();
+        };
     }
 
     private void mediaAction(string method) {
@@ -561,8 +786,9 @@ class BarWindow : Window {
         bigArtwork.texture = popupArtTexture;
     }
 
-    private void updateState() {
-        services.refresh();
+    private void updateState(bool refresh = true) {
+        if (deviceJob !is null) return;
+        if (refresh) services.refresh();
         auto state = services.state;
         foreach (i, button; desktops) {
             button.visible = i < state.desktops.length;
@@ -611,12 +837,18 @@ class BarWindow : Window {
         brightnessSlider.enabled = state.brightness >= 0;
         if (!brightnessSlider.dragging && state.brightness >= 0)
             brightnessSlider.setValue(state.brightness);
-        profileLabel.setText(hoveredHint.length ? hoveredHint :
-            "Profile: " ~ (state.profile.length ? state.profile : "unavailable"));
         saveButton.style.background_color = state.profile == "power-saver" ? accent :
             SDL_Color(43, 54, 70, 255);
         inhibitButton.style.background_color = services.sleepInhibited() ? accent :
             SDL_Color(43, 54, 70, 255);
+        wifiButton.setIcon(state.wifiEnabled ? "network-wireless" :
+            "network-wireless-disconnected");
+        wifiButton.style.background_color = wifiOpen || state.wifiEnabled ? accent :
+            SDL_Color(43, 54, 70, 255);
+        bluetoothButton.style.background_color = bluetoothOpen ||
+            state.bluetoothEnabled ? accent : SDL_Color(43, 54, 70, 255);
+        if (wifiOpen) renderWifiMenu();
+        if (bluetoothOpen) renderBluetoothMenu();
     }
 
     private void updateClock() {
@@ -645,10 +877,11 @@ class BarWindow : Window {
     private void toggleMedia() {
         if (mediaOpen) { closeMedia(); return; }
         if (controlsOpen) closeControls();
+        if (trayMenuOpen) closeTrayMenu();
         mediaOpen = true;
         positionMedia();
         SDL_ShowWindow(mediaWindow.window);
-        updateState();
+        updateState(false);
         mediaWindow.draw();
     }
 
@@ -660,125 +893,540 @@ class BarWindow : Window {
     private void toggleControls() {
         if (controlsOpen) { closeControls(); return; }
         if (mediaOpen) closeMedia();
+        if (trayMenuOpen) closeTrayMenu();
         controlsOpen = true;
         positionControls();
         SDL_ShowWindow(controlWindow.window);
-        updateState();
+        updateState(false);
         controlWindow.draw();
     }
 
     private void closeControls() {
         controlsOpen = false;
-        hoveredHint = "";
         powerOpen = false;
+        wifiOpen = false;
+        bluetoothOpen = false;
         foreach (button; powerActions) button.visible = false;
-        profileLabel.visible = true;
-        statusLabel.visible = false;
-        SDL_SetWindowSize(controlWindow.window, 348, 210);
-        controls.rect = SDL_FRect(0, 0, 348, 210);
+        setWifiMenuVisible(false);
+        setBluetoothMenuVisible(false);
+        clearError();
+        SDL_SetWindowSize(controlWindow.window, 348, 185);
+        controls.rect = SDL_FRect(0, 0, 348, 185);
         SDL_HideWindow(controlWindow.window);
     }
 
     private void togglePowerMenu() {
+        clearError();
+        if (wifiOpen) {
+            wifiOpen = false;
+            setWifiMenuVisible(false);
+        }
+        if (bluetoothOpen) {
+            bluetoothOpen = false;
+            setBluetoothMenuVisible(false);
+        }
         powerOpen = !powerOpen;
         foreach (button; powerActions) button.visible = powerOpen;
-        int height = powerOpen ? 260 : 210;
+        int height = powerOpen ? 233 : 185;
         SDL_SetWindowSize(controlWindow.window, 348, height);
         controls.rect = SDL_FRect(0, 0, 348, height);
         controlWindow.draw();
     }
 
+    private void requestDevice(DeviceRequest request) {
+        deviceGeneration++;
+        bool wifiRequest = request.operation == DeviceOperation.wifiList ||
+            request.operation == DeviceOperation.wifiPower ||
+            request.operation == DeviceOperation.wifiConnect;
+        if (wifiRequest) {
+            wifiLoading = true;
+            if (wifiOpen) renderWifiMenu();
+        } else {
+            bluetoothLoading = true;
+            if (bluetoothOpen) renderBluetoothMenu();
+        }
+        if (deviceJob !is null) {
+            // Keep the latest request; scans and device actions must not access
+            // the same service object concurrently.
+            if (deviceQueued) {
+                bool oldWifi = queuedDevice.operation == DeviceOperation.wifiList ||
+                    queuedDevice.operation == DeviceOperation.wifiPower ||
+                    queuedDevice.operation == DeviceOperation.wifiConnect;
+                if (oldWifi && !wifiRequest) wifiLoading = false;
+                if (!oldWifi && wifiRequest) bluetoothLoading = false;
+            }
+            queuedDevice = request;
+            deviceQueued = true;
+            return;
+        }
+        deviceJob = new DeviceJob(services, request);
+    }
+
+    private void finishDeviceJob() {
+        if (deviceJob is null || !deviceJob.done()) return;
+        auto job = deviceJob;
+        job.join();
+        deviceJob = null;
+        auto request = job.request;
+        bool wifiRequest = request.operation == DeviceOperation.wifiList ||
+            request.operation == DeviceOperation.wifiPower ||
+            request.operation == DeviceOperation.wifiConnect;
+        if (job.error.length) services.error = job.error;
+        else services.error = "";
+        DeviceRequest followup;
+        bool refreshAfter;
+        final switch (request.operation) {
+        case DeviceOperation.wifiList:
+            wifiNetworks = job.wifi;
+            wifiPage = 0;
+            wifiLoading = false;
+            break;
+        case DeviceOperation.wifiPower:
+            if (job.succeeded) {
+                services.state.wifiEnabled = request.option;
+                if (!request.option) wifiNetworks = null;
+                else {
+                    followup = DeviceRequest(DeviceOperation.wifiList, true);
+                    refreshAfter = wifiOpen;
+                }
+            }
+            wifiLoading = false;
+            break;
+        case DeviceOperation.wifiConnect:
+            wifiLoading = false;
+            followup = DeviceRequest(DeviceOperation.wifiList, false);
+            refreshAfter = job.succeeded && wifiOpen;
+            break;
+        case DeviceOperation.bluetoothList:
+            bluetoothDevices = job.bluetooth;
+            bluetoothPage = 0;
+            bluetoothLoading = false;
+            break;
+        case DeviceOperation.bluetoothPower:
+            if (job.succeeded) {
+                services.state.bluetoothEnabled = request.option;
+                if (!request.option) bluetoothDevices = null;
+                else {
+                    followup = DeviceRequest(DeviceOperation.bluetoothList, true);
+                    refreshAfter = bluetoothOpen;
+                }
+            }
+            bluetoothLoading = false;
+            break;
+        case DeviceOperation.bluetoothConnect:
+            bluetoothLoading = false;
+            followup = DeviceRequest(DeviceOperation.bluetoothList, false);
+            refreshAfter = job.succeeded && bluetoothOpen;
+            break;
+        }
+        if (wifiRequest && wifiOpen) {
+            if (job.succeeded && !job.error.length) clearError();
+            else if (!job.succeeded || job.error.length) showError();
+            renderWifiMenu();
+        } else if (!wifiRequest && bluetoothOpen) {
+            if (job.succeeded && !job.error.length) clearError();
+            else if (!job.succeeded || job.error.length) showError();
+            renderBluetoothMenu();
+        }
+        updateState(false);
+        if (deviceQueued) {
+            auto next = queuedDevice;
+            deviceQueued = false;
+            requestDevice(next);
+        } else if (refreshAfter) requestDevice(followup);
+    }
+
+    private void setWifiMenuVisible(bool visible) {
+        foreach (child; [cast(Widget)wifiHeading, wifiBack, wifiRefresh,
+                wifiToggle, wifiEmpty, wifiPrevious, wifiNext])
+            child.visible = visible;
+        foreach (row; wifiRows) row.visible = visible;
+    }
+
+    private void renderWifiMenu() {
+        if (!wifiOpen) return;
+        setWifiMenuVisible(true);
+        wifiToggle.enabled = services.state.wifiAvailable && !wifiLoading;
+        wifiToggle.setText(services.state.wifiEnabled ? "Turn Wi-Fi off" :
+            "Turn Wi-Fi on");
+        wifiRefresh.enabled = services.state.wifiEnabled && !wifiLoading;
+        size_t start = wifiPage * wifiRows.length;
+        if (start >= wifiNetworks.length) { wifiPage = 0; start = 0; }
+        auto count = min(wifiRows.length, wifiNetworks.length - start);
+        foreach (i, row; wifiRows) {
+            row.visible = !wifiLoading && services.state.wifiEnabled && i < count;
+            if (!row.visible) continue;
+            auto network = wifiNetworks[start + i];
+            auto security = network.security.length && network.security != "--" ?
+                "  •  secured" : "";
+            row.setText((network.connected ? "✓  " : "") ~ network.ssid ~
+                security ~ "  " ~ to!string(network.signal) ~ "%");
+            row.enabled = !network.connected;
+            row.style.background_color = network.connected ? accent :
+                SDL_Color(43, 54, 70, 255);
+        }
+        wifiEmpty.visible = wifiLoading || !services.state.wifiEnabled || !wifiNetworks.length;
+        wifiEmpty.setText(wifiLoading ? "Loading networks…" :
+            !services.state.wifiAvailable ?
+            "NetworkManager unavailable" : !services.state.wifiEnabled ?
+            "Wi-Fi is off" : "No networks found");
+        bool pages = !wifiLoading && wifiNetworks.length > wifiRows.length;
+        wifiPrevious.visible = pages;
+        wifiNext.visible = pages;
+        wifiPrevious.enabled = wifiPage > 0;
+        wifiNext.enabled = (wifiPage + 1) * wifiRows.length < wifiNetworks.length;
+        int height = pages ? 460 :
+            262 + cast(int)max(1, count) * 34;
+        SDL_SetWindowSize(controlWindow.window, 348, height);
+        controls.rect = SDL_FRect(0, 0, 348, height);
+        controlWindow.draw();
+    }
+
+    private void refreshWifiMenu(bool rescan) {
+        requestDevice(DeviceRequest(DeviceOperation.wifiList, rescan));
+    }
+
+    private void delegate() wifiRowAction(size_t index) {
+        return () {
+            auto at = wifiPage * wifiRows.length + index;
+            if (at >= wifiNetworks.length) return;
+            DeviceRequest request;
+            request.operation = DeviceOperation.wifiConnect;
+            request.network = wifiNetworks[at];
+            requestDevice(request);
+        };
+    }
+
+    private void toggleWifiMenu() {
+        clearError();
+        if (wifiOpen) {
+            wifiOpen = false;
+            setWifiMenuVisible(false);
+            SDL_SetWindowSize(controlWindow.window, 348, 185);
+            controls.rect = SDL_FRect(0, 0, 348, 185);
+        } else {
+            powerOpen = false;
+            foreach (button; powerActions) button.visible = false;
+            if (bluetoothOpen) {
+                bluetoothOpen = false;
+                setBluetoothMenuVisible(false);
+            }
+            wifiOpen = true;
+            refreshWifiMenu(true);
+        }
+        controlWindow.draw();
+    }
+
+    private void setBluetoothMenuVisible(bool visible) {
+        foreach (child; [cast(Widget)bluetoothHeading, bluetoothBack,
+                bluetoothRefresh, bluetoothSettings, bluetoothToggle, bluetoothEmpty,
+                bluetoothPrevious, bluetoothNext])
+            child.visible = visible;
+        foreach (row; bluetoothRows) row.visible = visible;
+    }
+
+    private void renderBluetoothMenu() {
+        if (!bluetoothOpen) return;
+        setBluetoothMenuVisible(true);
+        bluetoothToggle.enabled = services.state.bluetoothAvailable && !bluetoothLoading;
+        bluetoothToggle.setText(services.state.bluetoothEnabled ?
+            "Turn Bluetooth off" : "Turn Bluetooth on");
+        bluetoothRefresh.enabled = services.state.bluetoothEnabled && !bluetoothLoading;
+        size_t start = bluetoothPage * bluetoothRows.length;
+        if (start >= bluetoothDevices.length) { bluetoothPage = 0; start = 0; }
+        auto count = min(bluetoothRows.length, bluetoothDevices.length - start);
+        foreach (i, row; bluetoothRows) {
+            row.visible = !bluetoothLoading && services.state.bluetoothEnabled && i < count;
+            if (!row.visible) continue;
+            auto device = bluetoothDevices[start + i];
+            row.setText((device.connected ? "✓  " : "") ~ device.name ~
+                (device.connected ? "  •  Disconnect" :
+                    device.paired ? "  •  Connect" : "  •  Pair"));
+            row.style.background_color = device.connected ? accent :
+                SDL_Color(43, 54, 70, 255);
+        }
+        bluetoothEmpty.visible = bluetoothLoading || !services.state.bluetoothEnabled ||
+            !bluetoothDevices.length;
+        bluetoothEmpty.setText(bluetoothLoading ? "Loading devices…" :
+            !services.state.bluetoothAvailable ?
+            "No Bluetooth adapter" : !services.state.bluetoothEnabled ?
+            "Bluetooth is off" : "No devices found. Scan to search.");
+        bool pages = !bluetoothLoading && bluetoothDevices.length > bluetoothRows.length;
+        bluetoothPrevious.visible = pages;
+        bluetoothNext.visible = pages;
+        bluetoothPrevious.enabled = bluetoothPage > 0;
+        bluetoothNext.enabled =
+            (bluetoothPage + 1) * bluetoothRows.length < bluetoothDevices.length;
+        int height = pages ? 460 : 262 + cast(int)max(1, count) * 34;
+        SDL_SetWindowSize(controlWindow.window, 348, height);
+        controls.rect = SDL_FRect(0, 0, 348, height);
+        controlWindow.draw();
+    }
+
+    private void refreshBluetoothMenu(bool rescan) {
+        requestDevice(DeviceRequest(DeviceOperation.bluetoothList, rescan));
+    }
+
+    private void delegate() bluetoothRowAction(size_t index) {
+        return () {
+            auto at = bluetoothPage * bluetoothRows.length + index;
+            if (at >= bluetoothDevices.length) return;
+            DeviceRequest request;
+            request.operation = DeviceOperation.bluetoothConnect;
+            request.device = bluetoothDevices[at];
+            requestDevice(request);
+        };
+    }
+
+    private void toggleBluetoothMenu() {
+        clearError();
+        if (bluetoothOpen) {
+            bluetoothOpen = false;
+            setBluetoothMenuVisible(false);
+            SDL_SetWindowSize(controlWindow.window, 348, 185);
+            controls.rect = SDL_FRect(0, 0, 348, 185);
+        } else {
+            powerOpen = false;
+            foreach (button; powerActions) button.visible = false;
+            if (wifiOpen) {
+                wifiOpen = false;
+                setWifiMenuVisible(false);
+            }
+            bluetoothOpen = true;
+            refreshBluetoothMenu(true);
+        }
+        controlWindow.draw();
+    }
+
+    private void closeTrayMenu() {
+        trayMenuOpen = false;
+        trayMenuPath.length = 0;
+        SDL_HideWindow(trayMenuWindow.window);
+    }
+
+    private Button trayMenuRow(string text, int y, bool enabled = true) {
+        auto button = new Button(SDL_FRect(8, y, 224, 30),
+            trayMenuWindow.renderer, font, text);
+        button.text_placement = Label.TextPlacement.StartCenter;
+        button.style.padding_left = 10;
+        button.style.background_color = SDL_Color(0, 0, 0, 0);
+        button.style.hover_color = SDL_Color(55, 69, 88, 255);
+        button.style.border_radius = 10;
+        button.text_color = enabled ? SDL_Color(236, 241, 247, 255) : muted;
+        button.enabled = enabled;
+        place(trayMenuPanel, button, 8, y, 224, 30);
+        return button;
+    }
+
+    private void delegate() trayMenuAction(int id, bool submenu) {
+        return () {
+            if (submenu) {
+                trayMenuPath ~= id;
+                if (!rebuildTrayMenu(id)) {
+                    trayMenuPath.length--;
+                    showError();
+                }
+                trayMenuWindow.draw();
+            } else {
+                bool succeeded = services.activateTrayMenu(trayMenuItem, id);
+                closeTrayMenu();
+                if (!succeeded) showError();
+            }
+        };
+    }
+
+    private bool rebuildTrayMenu(int parentId) {
+        auto entries = services.trayMenu(trayMenuItem, parentId);
+        if (entries is null) return false;
+        while (trayMenuPanel.children.length) trayMenuPanel.removeChild(0);
+        int height = 16 + (trayMenuPath.length ? 32 : 0);
+        foreach (entry; entries) height += entry.separator ? 10 : 32;
+        height = max(24, height);
+        SDL_SetWindowSize(trayMenuWindow.window, 240, height);
+        trayMenuPanel.rect = SDL_FRect(0, 0, 240, height);
+        int y = 8;
+        if (trayMenuPath.length) {
+            auto back = trayMenuRow("‹  Back", y);
+            back.onActivate = () {
+                trayMenuPath.length--;
+                rebuildTrayMenu(trayMenuPath.length ? trayMenuPath[$ - 1] : 0);
+                trayMenuWindow.draw();
+            };
+            y += 32;
+        }
+        foreach (entry; entries) {
+            if (entry.separator) {
+                auto line = new Widget(SDL_FRect(16, y + 4, 208, 1),
+                    trayMenuWindow.renderer);
+                line.style.background_color = SDL_Color(75, 90, 109, 255);
+                line.focusable = false;
+                line.enabled = false;
+                place(trayMenuPanel, line, 16, y + 4, 208, 1);
+                y += 10;
+                continue;
+            }
+            auto caption = (entry.checked ? "✓  " : "") ~ entry.label ~
+                (entry.submenu ? "  ›" : "");
+            auto button = trayMenuRow(caption, y, entry.enabled);
+            button.onActivate = trayMenuAction(entry.id, entry.submenu);
+            y += 32;
+        }
+        return true;
+    }
+
+    private void openTrayMenu(BarTrayItem item, float anchorX) {
+        if (trayMenuOpen) closeTrayMenu();
+        if (item.menu.length == 0 || item.menu == "/NO_DBUSMENU") {
+            if (!services.activateTray(item, true)) showError();
+            return;
+        }
+        if (controlsOpen) closeControls();
+        if (mediaOpen) closeMedia();
+        trayMenuItem = item;
+        trayMenuPath.length = 0;
+        if (!rebuildTrayMenu(0)) { showError(); return; }
+        int x, y;
+        SDL_GetWindowPosition(window, &x, &y);
+        SDL_SetWindowPosition(trayMenuWindow.window,
+            max(0, x + cast(int)anchorX + 28 - 240), y + cast(int)rect.h);
+        trayMenuOpen = true;
+        SDL_ShowWindow(trayMenuWindow.window);
+        trayMenuWindow.draw();
+    }
+
     override void handleEvent(SDL_Event *event) {
         if (event is null) return;
+        const barId = SDL_GetWindowID(window);
+        const controlsId = SDL_GetWindowID(controlWindow.window);
+        const mediaId = SDL_GetWindowID(mediaWindow.window);
+        const trayMenuId = SDL_GetWindowID(trayMenuWindow.window);
         if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
-                event.window.windowID == SDL_GetWindowID(window)) {
+                event.window.windowID == barId) {
             quit = true;
             return;
         }
         if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+            if (trayMenuOpen) closeTrayMenu();
             if (mediaOpen) closeMedia();
             if (controlsOpen) closeControls();
             return;
         }
-        if (mediaOpen && event.type >= SDL_EVENT_WINDOW_FIRST &&
-                event.type <= SDL_EVENT_WINDOW_LAST &&
-                event.window.windowID == SDL_GetWindowID(mediaWindow.window)) {
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) closeMedia();
-            else mediaWindow.handleEvent(event);
-            return;
-        }
-        if (controlsOpen && event.type >= SDL_EVENT_WINDOW_FIRST &&
-                event.type <= SDL_EVENT_WINDOW_LAST &&
-                event.window.windowID == SDL_GetWindowID(controlWindow.window)) {
-            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) closeControls();
-            else {
-                if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE) {
-                    hoveredHint = "";
-                    profileLabel.setText("Profile: " ~
-                        (services.state.profile.length ? services.state.profile : "unavailable"));
+        if (event.type >= SDL_EVENT_WINDOW_FIRST &&
+                event.type <= SDL_EVENT_WINDOW_LAST) {
+            auto id = event.window.windowID;
+            if (id == trayMenuId) {
+                if (trayMenuOpen) {
+                    if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) closeTrayMenu();
+                    else trayMenuWindow.handleEvent(event);
                 }
-                controlWindow.handleEvent(event);
+                return;
             }
-            return;
+            if (id == mediaId) {
+                if (mediaOpen) {
+                    if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) closeMedia();
+                    else mediaWindow.handleEvent(event);
+                }
+                return;
+            }
+            if (id == controlsId) {
+                if (controlsOpen) {
+                    if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) closeControls();
+                    else controlWindow.handleEvent(event);
+                }
+                return;
+            }
+            if (id != barId) return;
         }
-        if ((controlsOpen || mediaOpen) && (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
                 event.type == SDL_EVENT_MOUSE_MOTION || event.type == SDL_EVENT_KEY_DOWN ||
-                event.type == SDL_EVENT_KEY_UP || event.type == SDL_EVENT_MOUSE_WHEEL)) {
+                event.type == SDL_EVENT_KEY_UP || event.type == SDL_EVENT_MOUSE_WHEEL) {
             uint windowId = event.type == SDL_EVENT_MOUSE_MOTION ? event.motion.windowID :
                 event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP ?
                 event.button.windowID : event.type == SDL_EVENT_MOUSE_WHEEL ?
                 event.wheel.windowID : event.key.windowID;
-            if (mediaOpen && windowId == SDL_GetWindowID(mediaWindow.window)) {
-                mediaWindow.handleEvent(event);
-                mediaWindow.draw();
-                return;
-            }
-            if (windowId == SDL_GetWindowID(controlWindow.window)) {
-                controlWindow.handleEvent(event);
-                if (event.type == SDL_EVENT_MOUSE_MOTION && !statusLabel.visible) {
-                    hoveredHint = "";
-                    foreach (child; controls.children) {
-                        auto icon = cast(IconButton)child;
-                        if (icon !is null && icon.enabled && icon.hovered) {
-                            hoveredHint = icon.fallback;
-                            break;
-                        }
-                    }
-                    profileLabel.setText(hoveredHint.length ? hoveredHint :
-                        "Profile: " ~ (services.state.profile.length ?
-                            services.state.profile : "unavailable"));
+            if (windowId == mediaId) {
+                if (mediaOpen) {
+                    mediaWindow.handleEvent(event);
+                    mediaWindow.draw();
                 }
-                controlWindow.draw();
                 return;
             }
+            if (windowId == trayMenuId) {
+                if (trayMenuOpen) {
+                    trayMenuWindow.handleEvent(event);
+                    if (trayMenuOpen) trayMenuWindow.draw();
+                }
+                return;
+            }
+            if (windowId == controlsId) {
+                if (controlsOpen) {
+                    controlWindow.handleEvent(event);
+                    if (controlsOpen) controlWindow.draw();
+                }
+                return;
+            }
+            if (windowId != barId) return;
         }
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+        if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
                 event.button.button == SDL_BUTTON_RIGHT) {
             foreach (i, button; trayButtons) if (button.visible &&
                     button.contains(event.button.x, event.button.y)) {
-                if (!services.activateTray(trayItems[i], true)) showError();
+                if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
+                    openTrayMenu(trayItems[i], button.rect.x);
                 return;
             }
         }
+        if (trayMenuOpen && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                event.button.windowID == barId) closeTrayMenu();
         super.handleEvent(event);
-        if (event.type == SDL_EVENT_WINDOW_RESIZED) layout();
+        if (event.type == SDL_EVENT_WINDOW_RESIZED &&
+                event.window.windowID == barId) layout();
     }
 
-    override int idleTimeoutMs() { return 1_000; }
+    override int idleTimeoutMs() {
+        return deviceJob !is null || statusJob !is null ? 50 : 1_000;
+    }
 
     override bool onIdle() {
-        if (++idleTicks % 3 == 0) updateState();
-        else if (services.state.media.playing && services.state.media.length > 0) {
-            auto media = &services.state.media;
-            media.position = min(media.position + 1_000_000, media.length);
-            timeLabel.setText(stamp(media.position) ~ "/" ~ stamp(media.length));
-            if (!seekSlider.dragging)
-                seekSlider.setValue(100.0 * media.position / media.length);
+        bool repaint;
+        if (deviceJob !is null && deviceJob.done()) {
+            finishDeviceJob();
+            repaint = true;
         }
-        if (controlsOpen) controlWindow.draw();
-        if (mediaOpen) mediaWindow.draw();
-        return true;
+        if (statusJob !is null && statusJob.done()) {
+            auto completed = statusJob;
+            completed.join();
+            statusJob = null;
+            if (completed.succeeded &&
+                    completed.deviceGeneration == deviceGeneration &&
+                    deviceJob is null) {
+                services.state = completed.state;
+                updateState(false);
+                repaint = true;
+            }
+        }
+        if (deviceJob is null && statusJob is null && ++idleTicks % 3 == 0)
+            statusJob = new StatusJob(services.state, deviceGeneration);
+        auto now = Clock.currTime();
+        if (now - lastMediaTick >= dur!"seconds"(1)) {
+            lastMediaTick = now;
+            repaint = true;
+            if (services.state.media.playing && services.state.media.length > 0) {
+                auto media = &services.state.media;
+                media.position = min(media.position + 1_000_000, media.length);
+                timeLabel.setText(stamp(media.position) ~ "/" ~ stamp(media.length));
+                if (!seekSlider.dragging)
+                    seekSlider.setValue(100.0 * media.position / media.length);
+            }
+        }
+        if (repaint) {
+            if (controlsOpen) controlWindow.draw();
+            if (mediaOpen) mediaWindow.draw();
+            if (trayMenuOpen) trayMenuWindow.draw();
+        }
+        return repaint;
     }
 
     override void draw() {

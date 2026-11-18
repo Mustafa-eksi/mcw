@@ -4,7 +4,6 @@ import std.algorithm : max, remove;
 import std.range : empty, popBack;
 import std.string : toStringz, fromStringz, toLower;
 import std.conv : to;
-import std.stdio : writeln;
 
 import bindbc.sdl;
 
@@ -107,7 +106,6 @@ abstract class Container : Widget {
     @property override void focused(bool focused) {
         this.Widget.focused = focused;
         if (!focused && focused_child != -1) {
-            writeln("Container focused: ", focused);
             children[focused_child].focused = false;
             focused_child = -1;
         }

@@ -1,6 +1,6 @@
 module mcw.bar_services;
 
-import std.algorithm : min, max;
+import std.algorithm : min, max, sort, canFind;
 import std.conv : to;
 import std.file : isFile;
 import std.json : JSONValue, JSONType, parseJSON;
@@ -9,11 +9,28 @@ import core.sys.posix.signal : SIGTERM;
 import std.string : indexOf, split, startsWith, strip;
 
 struct BarDesktop { string id, name; }
-struct BarTrayItem { string service, path, title, icon; }
+struct BarTrayItem {
+    string service, path, title, icon, menu;
+    bool itemIsMenu;
+}
+struct BarTrayMenuEntry {
+    int id;
+    string label;
+    bool enabled = true, visible = true, separator, submenu, checked;
+}
 struct BarMedia {
     string service, title, artist, art;
     long position, length;
     bool playing, canSeek;
+}
+struct BarWifiNetwork {
+    string ssid, security;
+    int signal;
+    bool connected;
+}
+struct BarBluetoothDevice {
+    string address, name;
+    bool paired, connected;
 }
 
 struct BarState {
@@ -23,6 +40,92 @@ struct BarState {
     BarTrayItem[] tray;
     int volume = -1, brightness = -1;
     string profile;
+    bool wifiAvailable, wifiEnabled;
+    bool bluetoothAvailable, bluetoothEnabled;
+}
+
+private bool bluetoothAddress(string address) {
+    if (address.length != 17) return false;
+    foreach (i, ch; address) {
+        if (i % 3 == 2) { if (ch != ':') return false; }
+        else if (!((ch >= '0' && ch <= '9') ||
+                (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')))
+            return false;
+    }
+    return true;
+}
+
+private BarBluetoothDevice[] parseBluetoothDevices(string output) {
+    BarBluetoothDevice[] devices;
+    foreach (line; output.split('\n')) {
+        line = line.strip();
+        if (!line.startsWith("Device ") || line.length < 25) continue;
+        auto address = line[7 .. 24];
+        if (!bluetoothAddress(address)) continue;
+        auto name = line.length > 25 ? line[25 .. $].strip() : address;
+        devices ~= BarBluetoothDevice(address, name.length ? name : address);
+    }
+    return devices;
+}
+
+private void markBluetoothDevices(ref BarBluetoothDevice[] devices,
+        BarBluetoothDevice[] marked, bool connected) {
+    foreach (item; marked) {
+        bool found;
+        foreach (ref device; devices) if (device.address == item.address) {
+            if (connected) device.connected = true;
+            else device.paired = true;
+            found = true;
+            break;
+        }
+        if (!found) {
+            auto device = item;
+            if (connected) device.connected = true;
+            else device.paired = true;
+            devices ~= device;
+        }
+    }
+}
+
+private string[] splitNmcliRow(string row) {
+    string[] fields;
+    string field;
+    bool escaped;
+    foreach (ch; row) {
+        if (escaped) { field ~= ch; escaped = false; }
+        else if (ch == '\\') escaped = true;
+        else if (ch == ':') { fields ~= field; field = ""; }
+        else field ~= ch;
+    }
+    if (escaped) field ~= '\\';
+    fields ~= field;
+    return fields;
+}
+
+private BarWifiNetwork[] parseWifiNetworks(string output) {
+    BarWifiNetwork[] networks;
+    foreach (row; output.split('\n')) {
+        auto fields = splitNmcliRow(row.strip());
+        if (fields.length != 4 || !fields[1].length) continue;
+        BarWifiNetwork network;
+        network.connected = fields[0] == "*";
+        network.ssid = fields[1];
+        network.security = fields[2];
+        try network.signal = to!int(fields[3]);
+        catch (Exception) { continue; }
+        bool merged;
+        foreach (ref existing; networks) if (existing.ssid == network.ssid &&
+                existing.security == network.security) {
+            existing.connected |= network.connected;
+            existing.signal = max(existing.signal, network.signal);
+            merged = true;
+            break;
+        }
+        if (!merged) networks ~= network;
+    }
+    networks.sort!((a, b) => a.connected != b.connected ? a.connected :
+        a.signal > b.signal);
+    return networks;
 }
 
 private JSONValue emptyJSON() { return JSONValue(null); }
@@ -55,6 +158,44 @@ private long asLong(JSONValue node, long fallback = 0) {
 private bool asBool(JSONValue node) {
     node = value(node);
     return node.type == JSONType.true_ || asString(node) == "true";
+}
+
+private BarTrayMenuEntry parseTrayMenuEntry(JSONValue node) {
+    BarTrayMenuEntry entry;
+    node = value(node);
+    if (node.type != JSONType.array || node.array.length != 3) return entry;
+    entry.id = cast(int) asLong(node.array[0]);
+    auto props = value(node.array[1]);
+    if (props.type != JSONType.object) return entry;
+    if (auto label = "label" in props.object) entry.label = asString(*label);
+    if (auto enabled = "enabled" in props.object) entry.enabled = asBool(*enabled);
+    if (auto visible = "visible" in props.object) entry.visible = asBool(*visible);
+    if (auto kind = "type" in props.object)
+        entry.separator = asString(*kind) == "separator";
+    if (auto display = "children-display" in props.object)
+        entry.submenu = asString(*display) == "submenu";
+    auto children = value(node.array[2]);
+    if (children.type == JSONType.array && children.array.length)
+        entry.submenu = true;
+    if (auto toggle = "toggle-state" in props.object)
+        entry.checked = asLong(*toggle) == 1;
+    return entry;
+}
+
+private BarTrayMenuEntry[] parseTrayMenu(JSONValue response) {
+    response = value(response);
+    if (response.type != JSONType.array || response.array.length != 2) return null;
+    auto root = value(response.array[1]);
+    if (root.type != JSONType.array || root.array.length != 3) return null;
+    auto children = value(root.array[2]);
+    if (children.type != JSONType.array) return null;
+    BarTrayMenuEntry[] entries;
+    foreach (child; children.array) {
+        auto entry = parseTrayMenuEntry(child);
+        if (entry.visible && (entry.separator || entry.label.length))
+            entries ~= entry;
+    }
+    return entries;
 }
 
 private JSONValue findKey(JSONValue node, string key) {
@@ -201,6 +342,10 @@ class BarServices {
                 "org.kde.StatusNotifierItem", "Title"));
             entry.icon = asString(property(entry.service, entry.path,
                 "org.kde.StatusNotifierItem", "IconName"));
+            entry.menu = asString(property(entry.service, entry.path,
+                "org.kde.StatusNotifierItem", "Menu"));
+            entry.itemIsMenu = asBool(property(entry.service, entry.path,
+                "org.kde.StatusNotifierItem", "ItemIsMenu"));
             next.tray ~= entry;
             if (next.tray.length == 6) break;
         }
@@ -223,7 +368,88 @@ class BarServices {
         auto maxValue = asLong(brightnessMax);
         if (maxValue > 0) next.brightness = cast(int)(100 * asLong(brightness) / maxValue);
         next.profile = command(["powerprofilesctl", "get"]);
+        auto wifiRadio = command(["nmcli", "radio", "wifi"]);
+        next.wifiAvailable = wifiRadio == "enabled" || wifiRadio == "disabled";
+        next.wifiEnabled = wifiRadio == "enabled";
+        auto bluetooth = command(["bluetoothctl", "show"]);
+        next.bluetoothAvailable = bluetooth.startsWith("Controller ");
+        next.bluetoothEnabled = next.bluetoothAvailable &&
+            bluetooth.canFind("Powered: yes");
         state = next;
+    }
+
+    BarBluetoothDevice[] bluetoothDevices(bool rescan = false) {
+        if (!state.bluetoothEnabled) { error = ""; return null; }
+        if (rescan) {
+            try {
+                auto scan = execute(["bluetoothctl", "--timeout", "4", "scan", "on"]);
+                if (scan.status != 0 || scan.output.canFind("Failed"))
+                    error = scan.output.strip().length ? scan.output.strip() :
+                        "Bluetooth scan failed";
+                else error = "";
+            } catch (Exception e) { error = e.msg; }
+        }
+        auto devices = parseBluetoothDevices(command(["bluetoothctl", "devices"]));
+        markBluetoothDevices(devices,
+            parseBluetoothDevices(command(["bluetoothctl", "devices", "Paired"])), false);
+        markBluetoothDevices(devices,
+            parseBluetoothDevices(command(["bluetoothctl", "devices", "Connected"])), true);
+        devices.sort!((a, b) => a.connected != b.connected ? a.connected :
+            a.paired != b.paired ? a.paired : a.name < b.name);
+        return devices;
+    }
+
+    private bool bluetoothAction(string[] args, string success) {
+        try {
+            auto result = execute(["bluetoothctl"] ~ args);
+            if (result.status == 0 && result.output.canFind(success)) {
+                error = "";
+                return true;
+            }
+            error = result.output.strip();
+        } catch (Exception e) { error = e.msg; }
+        if (!error.length) error = "Bluetooth action failed";
+        return false;
+    }
+
+    bool setBluetoothEnabled(bool enabled) {
+        return bluetoothAction(["power", enabled ? "on" : "off"],
+            "succeeded");
+    }
+
+    bool connectBluetooth(BarBluetoothDevice device) {
+        if (!bluetoothAddress(device.address)) {
+            error = "Invalid Bluetooth device address";
+            return false;
+        }
+        if (device.connected)
+            return bluetoothAction(["disconnect", device.address], "Disconnection successful");
+        if (!device.paired) {
+            if (!bluetoothAction(["--timeout", "30", "pair", device.address],
+                    "Pairing successful")) return false;
+            auto info = command(["bluetoothctl", "info", device.address]);
+            if (info.canFind("Connected: yes")) return true;
+        }
+        return bluetoothAction(["--timeout", "20", "connect", device.address],
+            "Connection successful");
+    }
+
+    BarWifiNetwork[] wifiNetworks(bool rescan = false) {
+        if (!state.wifiEnabled) return null;
+        auto output = command(["nmcli", "-t", "-e", "yes", "-f",
+            "IN-USE,SSID,SECURITY,SIGNAL", "device", "wifi", "list",
+            "--rescan", rescan ? "yes" : "no"]);
+        return parseWifiNetworks(output);
+    }
+
+    bool setWifiEnabled(bool enabled) {
+        return action(["nmcli", "radio", "wifi", enabled ? "on" : "off"]);
+    }
+
+    bool connectWifi(BarWifiNetwork network) {
+        if (!network.ssid.length) { error = "Wi-Fi network has no name"; return false; }
+        return action(["nmcli", "-w", "30", "device", "wifi", "connect",
+            network.ssid]);
     }
 
     bool switchDesktop(int index) {
@@ -255,6 +481,30 @@ class BarServices {
         return busAction(["call", item.service, item.path,
             "org.kde.StatusNotifierItem", context ? "ContextMenu" : "Activate",
             "ii", "0", "0"]);
+    }
+
+    BarTrayMenuEntry[] trayMenu(BarTrayItem item, int parentId = 0) {
+        if (!item.menu.startsWith("/") || item.menu == "/NO_DBUSMENU") {
+            error = "Tray item has no menu";
+            return null;
+        }
+        enum iface = "com.canonical.dbusmenu";
+        // Some menus populate their children only when they are about to open.
+        command(["busctl", "--user", "--quiet", "--timeout=2", "call",
+            item.service, item.menu, iface, "AboutToShow", "i", to!string(parentId)]);
+        auto response = bus(["call", item.service, item.menu, iface, "GetLayout",
+            "iias", to!string(parentId), "2", "7", "label", "enabled",
+            "visible", "type", "toggle-type", "toggle-state", "children-display"]);
+        auto entries = parseTrayMenu(response);
+        if (entries is null) error = "Tray menu unavailable";
+        else error = "";
+        return entries;
+    }
+
+    bool activateTrayMenu(BarTrayItem item, int id) {
+        return busAction(["call", item.service, item.menu,
+            "com.canonical.dbusmenu", "Event", "isvu", to!string(id),
+            "clicked", "s", "", "0"]);
     }
 
     bool setVolume(int percent) {
@@ -321,6 +571,19 @@ class BarServices {
 }
 
 unittest {
+    auto bt = parseBluetoothDevices("Device F8:3B:7E:E5:8A:E0 HUAWEI FreeBuds 7i\n"
+        ~ "Device invalid ignored\nDevice AA:BB:CC:DD:EE:FF Headphones\n");
+    assert(bt.length == 2 && bt[0].name == "HUAWEI FreeBuds 7i");
+    markBluetoothDevices(bt,
+        parseBluetoothDevices("Device AA:BB:CC:DD:EE:FF Headphones\n"), false);
+    assert(bt[1].paired && !bt[0].paired);
+    auto wifi = parseWifiNetworks("*:Cafe\\:North:WPA2:72\n"
+        ~ ":Cafe\\:North:WPA2:91\n:Open:--:55\n:Hidden:WPA2:bad\n");
+    assert(wifi.length == 2);
+    assert(wifi[0].ssid == "Cafe:North" && wifi[0].connected &&
+        wifi[0].signal == 91);
+    assert(wifi[1].ssid == "Open" && wifi[1].security == "--");
+
     auto desktops = parseJSON(`{"type":"a(iss)","data":[[0,"desktop-a","Work"],[1,"desktop-b","Chat"]]}`);
     BarDesktop[] parsed;
     collectDesktops(desktops, parsed);
@@ -332,4 +595,14 @@ unittest {
     assert(asLong(findKey(metadata, "mpris:length")) == 125000000);
     assert(strings(findKey(metadata, "xesam:artist"))[0] == "Artist");
     assert(asLong(parseJSON(`{"type":"i","data":72}`)) == 72);
+    auto trayLayout = parseJSON(`{"type":"u(ia{sv}av)","data":[4,[0,{},[
+        {"type":"(ia{sv}av)","data":[1,{"label":{"type":"s","data":"Open"}},[]]},
+        {"type":"(ia{sv}av)","data":[2,{"type":{"type":"s","data":"separator"}},[]]},
+        {"type":"(ia{sv}av)","data":[3,{"label":{"type":"s","data":"Disabled"},"enabled":{"type":"b","data":false}},[]]},
+        {"type":"(ia{sv}av)","data":[4,{"label":{"type":"s","data":"Hidden"},"visible":{"type":"b","data":false}},[]]}
+    ]]]}`);
+    auto menu = parseTrayMenu(trayLayout);
+    assert(menu.length == 3);
+    assert(menu[0].id == 1 && menu[0].label == "Open" && menu[0].enabled);
+    assert(menu[1].separator && !menu[2].enabled);
 }

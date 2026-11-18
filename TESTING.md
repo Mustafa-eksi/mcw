@@ -28,6 +28,12 @@ after invalid or missing CSS.
 renders every tab and color scheme into `test-output/showcase-*.bmp`, and checks button, menu,
 scroll, resize, tooltip hover, and long text clipping through the window event
 path.
+`launcher_window.d` builds a small set of desktop entries and icons, checks
+exact icon lookup, keyboard and mouse selection, all four input modes, theme
+changes, theme persistence across launcher instances, search URL dispatch, and
+compact window heights. `launcher_actions.d`
+checks arithmetic parsing and URL encoding. Launcher states render to
+`test-output/launcher-*.bmp`.
 
 ## What a layout test should check
 

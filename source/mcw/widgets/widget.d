@@ -4,7 +4,7 @@ import bindbc.sdl;
 import mcw.widgets.styling;
 import mcw.widgets.css : StyleSheet;
 import std.algorithm : min;
-import std.math : sqrt;
+import std.math : ceil;
 
 class Widget {
     private SDL_FRect _rect;
@@ -56,12 +56,7 @@ class Widget {
                 (resolved.border_width > 0 ? resolved.border_width : 1);
             if (border.a != 0 && width > 0) {
                 SDL_SetRenderDrawColor(renderer, border.tupleof);
-                foreach (i; 0 .. width) {
-                    SDL_FRect ring = SDL_FRect(rect.x + i, rect.y + i,
-                        rect.w - 2 * i, rect.h - 2 * i);
-                    if (ring.w <= 0 || ring.h <= 0) break;
-                    outlineRounded(ring, resolved.border_radius - i);
-                }
+                outlineRounded(rect, resolved.border_radius, width);
             }
         }
     }
@@ -82,33 +77,130 @@ class Widget {
 
     bool showFocusBorder() { return focused; }
 
-    private float cornerInset(float y, float w, float h, int radius) {
-        float r = min(cast(float) radius, min(w, h) / 2);
-        if (r <= 0) return 0;
-        float distance = y < r ? r - y - 0.5f :
-            (y >= h - r ? y - (h - r) + 0.5f : 0);
-        return distance <= 0 ? 0 : r - cast(float) sqrt(r * r - distance * distance);
+    private float cornerCoverage(int x, int y, float radius) {
+        int inside;
+        foreach (sy; 0 .. 4) foreach (sx; 0 .. 4) {
+            float dx = radius - x - (sx + 0.5f) / 4;
+            float dy = radius - y - (sy + 0.5f) / 4;
+            if (dx * dx + dy * dy <= radius * radius) ++inside;
+        }
+        return inside / 16.0f;
     }
 
     private void fillRounded(SDL_FRect area, int radius) {
-        if (radius <= 0) { SDL_RenderFillRect(renderer, &area); return; }
-        foreach (row; 0 .. cast(int) area.h) {
-            float inset = cornerInset(row, area.w, area.h, radius);
-            SDL_RenderLine(renderer, area.x + inset, area.y + row,
-                area.x + area.w - 1 - inset, area.y + row);
+        int width = cast(int) area.w, height = cast(int) area.h;
+        if (width <= 0 || height <= 0) return;
+        float r = min(cast(float) radius, min(area.w, area.h) / 2);
+        if (r <= 0) { SDL_RenderFillRect(renderer, &area); return; }
+        int corner = cast(int) ceil(r);
+
+        // Draw the fully covered spans first, then blend only the few pixels
+        // intersected by the circular edge.
+        foreach (row; 0 .. height) {
+            int y = min(row, height - 1 - row);
+            int firstFull;
+            if (y < r) {
+                firstFull = corner;
+                foreach (x; 0 .. corner) {
+                    if (cornerCoverage(x, y, r) == 1) {
+                        firstFull = x;
+                        break;
+                    }
+                }
+            }
+            if (firstFull <= width - 1 - firstFull)
+                SDL_RenderLine(renderer, area.x + firstFull, area.y + row,
+                    area.x + width - 1 - firstFull, area.y + row);
+        }
+
+        SDL_Color color;
+        SDL_GetRenderDrawColor(renderer, &color.r, &color.g, &color.b, &color.a);
+        SDL_BlendMode_ originalBlend;
+        SDL_GetRenderDrawBlendMode(renderer, &originalBlend);
+        scope(exit) {
+            SDL_SetRenderDrawColor(renderer, color.tupleof);
+            SDL_SetRenderDrawBlendMode(renderer, originalBlend);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        foreach (row; 0 .. height) {
+            int y = min(row, height - 1 - row);
+            if (y >= r) continue;
+            foreach (x; 0 .. corner) {
+                float coverage = cornerCoverage(x, y, r);
+                if (coverage == 1) break;
+                if (coverage == 0) continue;
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b,
+                    cast(ubyte)(color.a * coverage + 0.5f));
+                SDL_RenderPoint(renderer, area.x + x, area.y + row);
+                if (x != width - 1 - x)
+                    SDL_RenderPoint(renderer, area.x + width - 1 - x, area.y + row);
+            }
         }
     }
 
-    private void outlineRounded(SDL_FRect area, int radius) {
-        if (radius <= 0) { SDL_RenderRect(renderer, &area); return; }
-        foreach (row; 0 .. cast(int) area.h) {
-            float inset = cornerInset(row, area.w, area.h, radius);
-            if (row == 0 || row == cast(int) area.h - 1)
-                SDL_RenderLine(renderer, area.x + inset, area.y + row,
-                    area.x + area.w - 1 - inset, area.y + row);
-            else {
-                SDL_RenderPoint(renderer, area.x + inset, area.y + row);
-                SDL_RenderPoint(renderer, area.x + area.w - 1 - inset, area.y + row);
+    private void outlineRounded(SDL_FRect area, int radius, int thickness) {
+        int width = cast(int) area.w, height = cast(int) area.h;
+        if (width <= 0 || height <= 0) return;
+        int border = min(thickness, (min(width, height) + 1) / 2);
+        float r = min(cast(float) radius, min(area.w, area.h) / 2);
+        if (r <= 0) {
+            foreach (i; 0 .. border) {
+                SDL_FRect ring = SDL_FRect(area.x + i, area.y + i,
+                    area.w - 2 * i, area.h - 2 * i);
+                if (ring.w <= 0 || ring.h <= 0) break;
+                SDL_RenderRect(renderer, &ring);
+            }
+            return;
+        }
+
+        int corner = cast(int) ceil(r);
+        SDL_Color color;
+        SDL_GetRenderDrawColor(renderer, &color.r, &color.g, &color.b, &color.a);
+        SDL_BlendMode_ originalBlend;
+        SDL_GetRenderDrawBlendMode(renderer, &originalBlend);
+        scope(exit) {
+            SDL_SetRenderDrawColor(renderer, color.tupleof);
+            SDL_SetRenderDrawBlendMode(renderer, originalBlend);
+        }
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        // Straight sides are fully covered. Only the curved corner pixels need
+        // the same 4x4 coverage sampling used by fillRounded.
+        foreach (i; 0 .. border) {
+            if (corner <= width - 1 - corner) {
+                SDL_RenderLine(renderer, area.x + corner, area.y + i,
+                    area.x + width - 1 - corner, area.y + i);
+                if (i != height - 1 - i)
+                    SDL_RenderLine(renderer, area.x + corner, area.y + height - 1 - i,
+                        area.x + width - 1 - corner, area.y + height - 1 - i);
+            }
+            int start = i < corner ? corner : border;
+            int end = height - 1 - start;
+            if (start <= end) {
+                SDL_RenderLine(renderer, area.x + i, area.y + start,
+                    area.x + i, area.y + end);
+                if (i != width - 1 - i)
+                    SDL_RenderLine(renderer, area.x + width - 1 - i, area.y + start,
+                        area.x + width - 1 - i, area.y + end);
+            }
+        }
+        float innerRadius = r > border ? r - border : 0;
+        foreach (y; 0 .. corner) foreach (x; 0 .. corner) {
+            float coverage = cornerCoverage(x, y, r);
+            if (x >= border && y >= border)
+                coverage -= innerRadius > 0 ?
+                    cornerCoverage(x - border, y - border, innerRadius) : 1;
+            if (coverage <= 0) continue;
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b,
+                cast(ubyte)(color.a * coverage + 0.5f));
+            int right = width - 1 - x, bottom = height - 1 - y;
+            SDL_RenderPoint(renderer, area.x + x, area.y + y);
+            if (right != x)
+                SDL_RenderPoint(renderer, area.x + right, area.y + y);
+            if (bottom != y) {
+                SDL_RenderPoint(renderer, area.x + x, area.y + bottom);
+                if (right != x)
+                    SDL_RenderPoint(renderer, area.x + right, area.y + bottom);
             }
         }
     }

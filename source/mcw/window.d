@@ -13,8 +13,10 @@ class Window : Widget {
     SDL_PropertiesID props;
     private Widget _widget;
     bool quit;
+    private bool transparentBackground;
 
-    this (SDL_FRect rect, string title) {
+    this (SDL_FRect rect, string title, bool transparentBackground = false) {
+        this.transparentBackground = transparentBackground;
         props = SDL_CreateProperties();
 
         SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title.toStringz);
@@ -22,6 +24,8 @@ class Window : Widget {
         SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, rect.w.to!int);
         SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, rect.h.to!int);
         SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, true);
+        if (transparentBackground)
+            SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_TRANSPARENT_BOOLEAN, true);
 
         window = SDL_CreateWindowWithProperties(props);
         if (!window)
@@ -58,7 +62,8 @@ class Window : Widget {
     }
 
     override void draw() {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0,
+            transparentBackground ? 0 : 255);
         SDL_RenderClear(renderer);
         widget.draw();
         SDL_RenderPresent(renderer);

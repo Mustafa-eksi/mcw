@@ -35,13 +35,13 @@ class TextInput : Label {
 
     private void changed(string value) {
         setText(value);
-        if (onChange !is null) onChange(text);
     }
 
     void setValue(string value) {
         changed(value);
         cursor = anchor = text.length;
         keepCursorVisible();
+        if (onChange !is null) onChange(text);
     }
 
     private void replaceSelection(string value) {
@@ -50,6 +50,7 @@ class TextInput : Label {
         changed(text[0 .. lo] ~ value ~ text[hi .. $]);
         cursor = anchor = lo + value.length;
         keepCursorVisible();
+        if (onChange !is null) onChange(text);
     }
 
     private int prefixWidth(size_t end) {

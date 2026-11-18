@@ -29,3 +29,16 @@ Tooltip { background: #d7e4ec; border-radius: 4px; }
 Slider { track-color: #7f9ab3; thumb-color: #b55d32; }
 ProgressBar { background: #d5dedf; fill-color: #568773; }
 Separator { fill-color: #879bab; }
+/* Launcher */
+TextInput.launcher-search { border-radius: 8px; padding: 12px 16px; }
+SelectableList.launcher-list { background: transparent; }
+List.launcher-result { background: #ebe6dc; border-radius: 8px; }
+List.launcher-result:hover { background: #d7e4ec; }
+List.launcher-result:focus { background: #d7e4ec; border: 1px solid #b55d32; }
+Icon.launcher-icon { background: #8eb5db; border-radius: 6px; }
+Label.launcher-monogram { color: #253244; }
+SelectableList.launcher-command-list { background: transparent; }
+ListItem.launcher-command { background: #ebe6dc; border: none; border-radius: 8px; padding: 12px 16px; }
+ListItem.launcher-command:hover { background: #d7e4ec; }
+ListItem.launcher-command:selected { background: #d7e4ec; border: 1px solid #b55d32; }
+Label.launcher-feedback { background: #ebe6dc; border-radius: 8px; padding: 13px 16px; }

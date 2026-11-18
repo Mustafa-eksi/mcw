@@ -46,6 +46,7 @@ int main(string[] args) {
     }
     TTF_Font *font = TTF_OpenFont("liberation-sans.ttf",
             current_window == "showcase" ? 17 :
+            current_window == "launcher" ? 18 :
             current_window == "bar" ? 15 : TEXT_FONT_SIZE);
     if (font is null) {
         writeln("Could not open liberation-sans.ttf: ", SDL_GetError());
@@ -56,7 +57,7 @@ int main(string[] args) {
     Window current;
     switch (current_window) {
     case "launcher":
-        current = new Launcher(SDL_FRect(0, 0, 500, 100), "mcw", font);
+        current = new Launcher(SDL_FRect(0, 0, 560, 380), "MCW launcher", font);
         break;
     case "test":
         current = new LayoutTestWindow(SDL_FRect(0, 0, 800, 600), "test", font);

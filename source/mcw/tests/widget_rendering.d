@@ -94,6 +94,58 @@ unittest {
 }
 
 unittest {
+    auto canvas = Canvas(44, 44);
+    auto widget = new Widget(SDL_FRect(2, 2, 40, 40), canvas.renderer);
+    widget.style.background_color = SDL_Color(100, 150, 200, 255);
+    widget.style.border_radius = 20;
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 0);
+    SDL_RenderClear(canvas.renderer);
+    SDL_BlendMode_ before, after;
+    assert(SDL_GetRenderDrawBlendMode(canvas.renderer, &before));
+    widget.draw();
+    SDL_RenderPresent(canvas.renderer);
+    assert(SDL_GetRenderDrawBlendMode(canvas.renderer, &after));
+    assert(before == after);
+    ubyte r, g, b, a;
+    assert(SDL_ReadSurfacePixel(canvas.surface, 2, 2, &r, &g, &b, &a));
+    assert(a == 0);
+    assert(SDL_ReadSurfacePixel(canvas.surface, 7, 8, &r, &g, &b, &a));
+    assert(a > 0 && a < 255);
+    assert(SDL_ReadSurfacePixel(canvas.surface, 22, 22, &r, &g, &b, &a));
+    assert(r == 100 && g == 150 && b == 200 && a == 255);
+}
+
+unittest {
+    auto canvas = Canvas(44, 44);
+    auto widget = new Widget(SDL_FRect(2, 2, 40, 40), canvas.renderer);
+    widget.style.border_color = SDL_Color(255, 80, 40, 255);
+    widget.style.border_radius = 12;
+    widget.style.border_width = 1;
+    widget.style.has_border_width = true;
+    SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 0);
+    SDL_RenderClear(canvas.renderer);
+    SDL_BlendMode_ before, after;
+    assert(SDL_GetRenderDrawBlendMode(canvas.renderer, &before));
+    widget.draw();
+    SDL_RenderPresent(canvas.renderer);
+    assert(SDL_GetRenderDrawBlendMode(canvas.renderer, &after));
+    assert(before == after);
+
+    int partial;
+    foreach (y; 2 .. 14) foreach (x; 2 .. 14) {
+        ubyte r, g, b, a;
+        assert(SDL_ReadSurfacePixel(canvas.surface, x, y, &r, &g, &b, &a));
+        if (a > 0 && a < 255) partial++;
+    }
+    assert(partial > 0);
+    ubyte r, g, b, a;
+    assert(SDL_ReadSurfacePixel(canvas.surface, 22, 2, &r, &g, &b, &a));
+    assert(a == 255);
+    assert(SDL_ReadSurfacePixel(canvas.surface, 2, 2, &r, &g, &b, &a));
+    assert(a == 0);
+}
+
+unittest {
     auto canvas = Canvas(10, 10);
     auto source = SDL_CreateSurface(2, 2, SDL_PIXELFORMAT_RGBA32);
     assert(source !is null);
