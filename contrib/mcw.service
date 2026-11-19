@@ -1,0 +1,13 @@
+[Unit]
+Description=MCW desktop daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Programming/mcw
+ExecStart=%h/Programming/mcw/mcw daemon
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

@@ -491,6 +491,19 @@ class BarWindow : Window {
         destroy(services);
     }
 
+    bool ownsWindow(uint id) {
+        return id == SDL_GetWindowID(window) ||
+            id == SDL_GetWindowID(controlWindow.window) ||
+            id == SDL_GetWindowID(mediaWindow.window) ||
+            id == SDL_GetWindowID(trayMenuWindow.window);
+    }
+
+    void hidePopups() {
+        if (trayMenuOpen) closeTrayMenu();
+        if (mediaOpen) closeMedia();
+        if (controlsOpen) closeControls();
+    }
+
     private Button makeButton(SDL_Renderer *target, string caption) {
         auto button = new Button(SDL_FRect(0, 0, 35, 32), target, font, caption);
         button.style.background_color = SDL_Color(43, 54, 70, 255);

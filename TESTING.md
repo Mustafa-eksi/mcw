@@ -13,6 +13,13 @@ before reading its pixels. The tests write binary PPM (`P6`) images to
 `test-output/`; this directory is ignored by Git. Open these files when an
 assertion fails to inspect the rendered result.
 
+For daemon IPC, start `mcw daemon` with `XDG_RUNTIME_DIR` set, then run
+`mcw status`, `mcw show launcher`, `mcw hide bar`, `mcw show bar`, and
+`mcw stop` from another terminal in the same graphical session. Check that
+the daemon remains running while windows are hidden and exits after `stop`.
+For a headless command and socket lifecycle check after a non-temporary build,
+run `tests/daemon-ipc.sh ./mcw`.
+
 `layout_pixels.d` checks Box and List in both orientations. `layout_behavior.d`
 checks relayout, style propagation, container draw order, focus, and removal.
 `widget_rendering.d` checks the base Widget's fill and borders, Icon texture

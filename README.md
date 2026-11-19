@@ -75,6 +75,45 @@ services appear unavailable. On KDE Wayland, the bar uses XWayland when availabl
 so it can start at the top of the screen. The SDL window stays above ordinary
 windows but does not reserve screen space as a native Plasma panel would.
 
+# Daemon and window control
+
+Run the long-lived daemon from the repository root:
+
+```sh
+dub run --compiler=ldc2 --temp-build -- daemon
+```
+
+It starts with the bar visible. In another terminal, use the built `mcw`
+executable (or `dub run --compiler=ldc2 --temp-build -- <command>`):
+
+```sh
+mcw show launcher
+mcw hide bar
+mcw toggle bar
+mcw show dialog
+mcw status
+mcw stop
+```
+
+`show`, `hide`, and `toggle` accept `bar`, `launcher`, `dialog`, `showcase`,
+`test`, and `test_list`. Closing a managed window hides it; `stop` ends the
+daemon. Showing the launcher clears its previous search. The existing
+`mcw bar` and `mcw launcher` commands still run standalone.
+
+The CLI uses a local Unix socket under `$XDG_RUNTIME_DIR`, scoped by the
+graphical session's `WAYLAND_DISPLAY`, `DISPLAY`, or `XDG_SESSION_ID`. The
+daemon and CLI must use the same session environment. The socket is created
+with owner-only permissions and removed on shutdown. `mcw daemon` stays in the
+foreground so a session startup script or systemd user service can manage it;
+such a service must set its working directory to the repository root so the
+font and theme files can be found.
+
+An example user service is in `contrib/mcw.service`. Build without
+`--temp-build` to place the current executable in the repository root, then
+copy the unit to `~/.config/systemd/user/mcw.service` and adjust its paths if
+your checkout is elsewhere. Reload the user manager and start the unit with
+`systemctl --user daemon-reload` and `systemctl --user enable --now mcw.service`.
+
 # Styling
 
 MCW supports direct `Style` assignments and loading CSS files for widget trees.

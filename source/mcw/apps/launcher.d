@@ -218,6 +218,15 @@ class Launcher : Window {
         } catch (Exception) { }
     }
 
+    void prepareShow() {
+        quit = false;
+        panel.focused = true;
+        panel.focused_child = 0;
+        text_input.focused = true;
+        text_input.setValue("");
+        SDL_StartTextInput(window);
+    }
+
     override void handleEvent(SDL_Event *event) {
         if (event.type == SDL_EVENT_KEY_DOWN) {
             if (event.key.key == SDLK_ESCAPE) { quit = true; return; }
